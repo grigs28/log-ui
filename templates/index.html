@@ -6,12 +6,12 @@
   <form id="searchform" method="get" action="/search">
     <div class="row">
       <div><label>服务器</label>
-        <select name="host">
+        <select name="host" onchange="this.form.submit()">
           {% for h in hosts %}<option value="{{h}}" {{ 'selected' if h==host else '' }}>{{h}}</option>{% endfor %}
         </select>
       </div>
       <div><label>等级</label>
-        <select name="level">
+        <select name="level" onchange="this.form.submit()">
           {% for l in levels %}<option value="{{l}}" {{ 'selected' if l==level else '' }}>{{l}}</option>{% endfor %}
         </select>
       </div>
@@ -19,7 +19,7 @@
         <input type="text" name="q" value="{{q}}" size="32" placeholder='例: _msg:"error" 或 *'>
       </div>
       <div><label>条数</label>
-        <input type="number" name="limit" value="{{limit}}" min="1" max="1000" style="width:80px">
+        <input type="number" name="limit" value="{{limit}}" min="1" max="1000" style="width:80px" onchange="this.form.submit()">
       </div>
       <div><label>自动刷新</label>
         <select id="refresh" name="refresh">

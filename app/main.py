@@ -106,7 +106,13 @@ def search(
     refresh = int(refresh) if refresh is not None else prefs["refresh_sec"]
     expr = _build_expr(q, host, level)
     logs = vl.query_logs(expr=expr, limit=limit)
-    hosts = ["ALL"] + vl.field_values("hostname", limit=100)
+    # sync host list with /servers: exclude ignored, registered first
+    from . import servers as srv_search
+    ignored_set = set(srv_search.load_ignore())
+    reg_names = {s.get("name") for s in srv_search.load_registry()}
+    all_hosts = [h for h in vl.field_values("hostname", limit=200) if h and h not in ignored_set]
+    all_hosts.sort(key=lambda h: (h not in reg_names, h))
+    hosts = ["ALL"] + all_hosts
     return templates.TemplateResponse(
         request, "index.html",
         {"user": user, "theme": prefs["theme"], "logs": logs, "hosts": hosts, "levels": LEVELS,
