@@ -70,16 +70,21 @@ def overview(request: Request, days: int = 7):
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     days = days if days in RANGE_OPTIONS else 7
-    hosts_seen = [h for h in vl.field_values("hostname", limit=200) if h]
+    from . import servers as srv_ov
+    ignored_set = set(srv_ov.load_ignore())
+    by_host_raw = vl.stats_by("hostname", days)
+    by_host_f = {k: v for k, v in by_host_raw.items() if k and k != "(none)" and k not in ignored_set}
+    by_err_raw = vl.stats_by("hostname", days, "level:error")
+    by_err_f = {k: v for k, v in by_err_raw.items() if k and k != "(none)" and k not in ignored_set}
     data = {
         "days": days,
         "total": vl.stats_total("*", days),
         "errors": vl.stats_total("level:error", days),
         "warnings": vl.stats_total("level:warning", days),
-        "nhosts": len(hosts_seen),
+        "nhosts": len(by_host_f),
         "by_level": vl.stats_by("level", days),
-        "by_host": vl.stats_by("hostname", days),
-        "errors_by_host": vl.stats_by("hostname", days, "level:error"),
+        "by_host": by_host_f,
+        "errors_by_host": by_err_f,
         "trend": [[t, c] for t, c in vl.stats_range("*", days, "1h")],
     }
     return templates.TemplateResponse(
