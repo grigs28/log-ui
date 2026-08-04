@@ -75,7 +75,12 @@ def overview(request: Request, days: int = 7):
     by_host_raw = vl.stats_by("hostname", days)
     by_host_f = {k: v for k, v in by_host_raw.items() if k and k != "(none)" and k not in ignored_set}
     by_err_raw = vl.stats_by("hostname", days, "level:error")
-    by_err_f = {k: v for k, v in by_err_raw.items() if k and k != "(none)" and k not in ignored_set}
+    by_err_f = {}
+    for k, v in by_err_raw.items():
+        if k in ignored_set:
+            continue
+        label = k if (k and k != "(none)") else "未归属"
+        by_err_f[label] = by_err_f.get(label, 0) + v
     data = {
         "days": days,
         "total": vl.stats_total("*", days),
