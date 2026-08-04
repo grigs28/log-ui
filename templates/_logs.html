@@ -1,0 +1,17 @@
+{# log table fragment — included by index.html, returned by /logs (auto-refresh poll) #}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <tr><th>时间</th><th>等级</th><th>服务器</th><th>来源</th><th>消息</th></tr>
+    {% for log in logs %}
+    <tr>
+      <td class="time">{{ log._time }}</td>
+      <td><span class="lv lv-{{ log.level or 'info' }}">{{ log.level or '-' }}</span></td>
+      <td>{{ log.hostname or '-' }}</td>
+      <td class="meta">{{ log.app_name or log.log_source or '-' }}</td>
+      <td class="msg">{{ log._msg }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="meta" style="text-align:center;padding:30px">无数据（试试调整时间范围/条件）</td></tr>
+    {% endfor %}
+  </table>
+</div>

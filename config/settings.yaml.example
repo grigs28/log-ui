@@ -1,0 +1,15 @@
+# log-ui 运行配置 —— 复制为 settings.yaml 并填写
+# VictoriaLogs API（本应用查询它；同机部署用 localhost）
+vl_url: http://localhost:9428
+
+# yz-login 单点登录
+yz_login_url: http://192.168.0.8
+yz_app_id: "14"                              # 在 yz-login 后台注册本应用得到的 ID
+callback_url: http://<服务器IP>/auth/callback
+
+# 监听
+listen_host: 0.0.0.0
+listen_port: 80                              # 80 为特权端口，见 README 部署说明
+
+# session 签名密钥 —— 生成: openssl rand -hex 32
+secret_key: CHANGE_ME

@@ -1,0 +1,7 @@
+# 服务器纳管清单 —— 复制为 servers.yaml
+# name 必须与该设备日志里的 hostname 字段一致，才能匹配统计/健康
+servers:
+  - name: my-host
+    ip: 192.168.0.10
+    type: server_linux          # server_linux / nas / firewall / vpn / zerotrust ...
+    note: 示例

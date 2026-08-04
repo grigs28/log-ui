@@ -1,0 +1,13 @@
+# 实际配置（含密钥/内网信息）—— 用 .example 模板入库
+config/settings.yaml
+config/servers.yaml
+# 个人偏好（运行时数据）
+config/prefs/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+# 日志 / 编辑器
+*.log
+.vscode/
+.idea/

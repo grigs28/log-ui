@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}服务器 · log-ui{% endblock %}
+{% block content %}
+<div class="card">
+  <h3 style="margin-top:0">服务器纳管 <span class="meta">（注册 + 自动发现，按 7 天日志量排序）</span></h3>
+  <table>
+    <tr><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.name }} {% if not r.registered %}<span class="tag">未注册</span>{% endif %}</td>
+      <td class="num">{{ r.ip or '-' }}</td>
+      <td>{{ r.type or '-' }}</td>
+      <td class="meta">{{ r.note }}</td>
+      <td>{% if r.count > 0 %}<span class="tag ok">活跃</span>{% else %}<span class="tag warn">静默</span>{% endif %}</td>
+      <td class="num">{{ "{:,}".format(r.count) }}</td>
+      <td class="num">{% if r.errors %}<span class="lv lv-error">{{ r.errors }}</span>{% else %}0{% endif %}</td>
+      <td class="time">{{ r.last_seen or '-' }}</td>
+      {% if is_admin %}<td>
+        {% if r.registered %}
+        <form method="post" action="/servers/delete" style="display:inline">
+          <input type="hidden" name="name" value="{{ r.name }}">
+          <button class="btn btn-muted" style="padding:2px 8px">移除</button>
+        </form>
+        {% else %}<span class="meta">-</span>{% endif %}
+      </td>{% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if is_admin %}
+<div class="card" style="max-width:720px">
+  <h3 style="margin-top:0">添加 / 注册服务器</h3>
+  <form method="post" action="/servers/add" class="row">
+    <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
+    <div><label>IP</label><input type="text" name="ip"></div>
+    <div><label>类型</label><input type="text" name="stype" placeholder="server_linux/nas/firewall"></div>
+    <div><label>备注</label><input type="text" name="note"></div>
+    <div><button>添加</button></div>
+  </form>
+  <p class="meta">名称须与该设备日志里的 <code>hostname</code> 字段一致才能匹配统计/健康。自动发现的主机也可在此登记。</p>
+</div>
+{% else %}
+<p class="meta">仅管理员可增删服务器。</p>
+{% endif %}
+{% endblock %}

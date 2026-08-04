@@ -1,0 +1,16 @@
+[Unit]
+Description=log-ui (log viewer on VictoriaLogs, yz-login SSO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/logging/log-ui
+ExecStart=/opt/conda3/envs/log-ai/bin/uvicorn app.main:app --host 0.0.0.0 --port 80
+Restart=always
+RestartSec=5
+User=root
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

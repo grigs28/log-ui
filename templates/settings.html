@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}设置 · log-ui{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:600px">
+  <h3 style="margin-top:0">个人偏好</h3>
+  <p class="meta">按用户保存（{{ user.display_name or user.username }}），影响总览页默认行为。</p>
+  <form method="post" action="/settings">
+    <div style="margin-bottom:12px">
+      <label>默认自动刷新间隔</label>
+      <select name="refresh_sec">
+        {% for s in refresh_options %}<option value="{{s}}" {{ 'selected' if s==prefs.refresh_sec else '' }}>{{ '关' if s==0 else s~' 秒' }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>默认显示条数</label>
+      <input type="number" name="limit" value="{{ prefs.limit }}" min="1" max="1000" style="width:120px">
+    </div>
+    <div style="margin-bottom:12px">
+      <label>主题</label>
+      <select name="theme">
+        <option value="dark" {{ 'selected' if prefs.theme=='dark' else '' }}>深色 (dark)</option>
+        <option value="light" {{ 'selected' if prefs.theme=='light' else '' }}>浅色 (light)</option>
+      </select>
+    </div>
+    <button>保存偏好</button>
+    <a href="/" class="btn" style="background:var(--muted)">返回总览</a>
+  </form>
+</div>
+
+<div class="card" style="max-width:600px">
+  <h3 style="margin-top:0">SSO / 单点登录 (yz-login)</h3>
+  <table style="margin-bottom:10px">
+    <tr><td class="meta">当前账户</td><td>{{ user.display_name or user.username }}</td></tr>
+    <tr><td class="meta">用户 ID</td><td>{{ user.id }}</td></tr>
+    <tr><td class="meta">角色</td><td>{{ '管理员' if user.is_admin else '普通用户' }}</td></tr>
+    <tr><td class="meta">yz 用户名</td><td>{{ user.username }}</td></tr>
+  </table>
+
+  {% if user.is_admin %}
+  <p class="meta">管理员可修改 yz-login 对接参数（保存后即时生效，免重启）：</p>
+  <form method="post" action="/settings/sso">
+    <div style="margin-bottom:10px">
+      <label>yz-login 平台地址</label>
+      <input type="text" name="yz_login_url" value="{{ sso.yz_login_url }}" style="width:320px">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>应用 ID</label>
+      <input type="text" name="yz_app_id" value="{{ sso.yz_app_id }}" style="width:120px">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>回调地址（只读，须与 yz-login 后台注册一致）</label>
+      <input type="text" value="{{ sso.callback_url }}" style="width:320px" disabled>
+    </div>
+    <button>保存 SSO 配置</button>
+  </form>
+  {% else %}
+  <p class="meta">yz-login: {{ sso.yz_login_url }} · 应用 ID {{ sso.yz_app_id }}</p>
+  {% endif %}
+
+  <p class="meta" style="margin-top:12px"><a href="/auth/logout">登出 / 切换账号</a></p>
+</div>
+{% endblock %}

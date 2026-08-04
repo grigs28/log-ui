@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}日志总览 · log-ui{% endblock %}
+
+{% block content %}
+<div class="card">
+  <form id="searchform" method="get" action="/search">
+    <div class="row">
+      <div><label>服务器</label>
+        <select name="host">
+          {% for h in hosts %}<option value="{{h}}" {{ 'selected' if h==host else '' }}>{{h}}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>等级</label>
+        <select name="level">
+          {% for l in levels %}<option value="{{l}}" {{ 'selected' if l==level else '' }}>{{l}}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>LogsQL / 关键词</label>
+        <input type="text" name="q" value="{{q}}" size="32" placeholder='例: _msg:"error" 或 *'>
+      </div>
+      <div><label>条数</label>
+        <input type="number" name="limit" value="{{limit}}" min="1" max="1000" style="width:80px">
+      </div>
+      <div><label>自动刷新</label>
+        <select id="refresh" name="refresh">
+          {% for s in refresh_options %}<option value="{{s}}" {{ 'selected' if s==refresh else '' }}>{{ '关' if s==0 else s~'s' }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="align-self:flex-end"><button>搜索</button></div>
+    </div>
+  </form>
+  <div class="meta" style="margin-top:10px">
+    查询: <code>{{expr}}</code> · <span id="rstatus">返回 {{count}} 条</span> · <span id="rtime"></span>
+  </div>
+</div>
+
+<div id="logs">
+  {% include "_logs.html" %}
+</div>
+
+<script>
+(function(){
+  var sel = document.getElementById('refresh');
+  var timer = null;
+  function fieldVal(name){
+    var el = document.querySelector('[name="'+name+'"]');
+    return el && el.value ? el.value : '';
+  }
+  function pollUrl(){
+    var p = new URLSearchParams();
+    ['host','level','q','limit'].forEach(function(n){ var v=fieldVal(n); if(v) p.set(n,v); });
+    return '/logs?' + p.toString();
+  }
+  function tick(){
+    fetch(pollUrl(), {headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){ return r.ok ? r.text() : Promise.reject(); })
+      .then(function(html){
+        document.getElementById('logs').innerHTML = html;
+        var t = document.getElementById('rtime');
+        if (t) t.textContent = '更新: ' + new Date().toLocaleTimeString();
+      }).catch(function(){});
+  }
+  function go(sec){ if(timer){ clearInterval(timer); timer=null; } if(sec>0){ timer=setInterval(tick, sec*1000); } }
+  sel.addEventListener('change', function(){ go(parseInt(sel.value)||0); });
+  go(parseInt(sel.value)||0);
+})();
+</script>
+{% endblock %}
