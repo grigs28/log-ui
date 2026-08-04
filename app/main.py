@@ -117,11 +117,12 @@ async def logs_fragment(request: Request, q: str = "*", host: str = "ALL",
 
 # ---------------- 服务器管理 ----------------
 @app.get("/servers")
-async def servers_page(request: Request):
+async def servers_page(request: Request, edit: str | None = None):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     registry = srv.load_registry()
+    ignored = set(srv.load_ignore())
     reg_names = {s.get("name") for s in registry}
     by_host = vl.stats_by("hostname", 7)
     errors_by_host = vl.stats_by("hostname", 7, "level:error")
@@ -135,14 +136,27 @@ async def servers_page(request: Request):
                      "count": by_host.get(n, 0), "errors": errors_by_host.get(n, 0),
                      "last_seen": vl.last_seen(n)})
     for h in all_hosts:
-        if h not in reg_names:
-            rows.append({"name": h, "ip": "", "type": "", "note": "", "registered": False,
-                         "count": by_host.get(h, 0), "errors": errors_by_host.get(h, 0),
-                         "last_seen": vl.last_seen(h)})
+        if h in reg_names or h in ignored:
+            continue
+        rows.append({"name": h, "ip": "", "type": "", "note": "", "registered": False,
+                     "count": by_host.get(h, 0), "errors": errors_by_host.get(h, 0),
+                     "last_seen": vl.last_seen(h)})
     rows.sort(key=lambda r: r["count"], reverse=True)
+
+    edit_entry = None
+    edit_is_registered = False
+    if edit:
+        edit_entry = next((s for s in registry if s.get("name") == edit), None)
+        if edit_entry:
+            edit_is_registered = True
+        elif edit not in ignored:
+            edit_entry = {"name": edit, "ip": "", "type": "", "note": ""}
+
     return templates.TemplateResponse(
         request, "servers.html",
-        {"user": user, "theme": _theme(user), "rows": rows, "is_admin": bool(user.get("is_admin"))},
+        {"user": user, "theme": _theme(user), "rows": rows, "is_admin": bool(user.get("is_admin")),
+         "edit_entry": edit_entry, "edit_is_registered": edit_is_registered,
+         "ignored": sorted(ignored)},
     )
 
 
@@ -166,6 +180,40 @@ async def servers_delete(request: Request, name: str = Form("")):
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
     srv.remove_server(name)
+    return RedirectResponse("/servers", status_code=303)
+
+
+@app.post("/servers/update")
+async def servers_update(request: Request, orig_name: str = Form(""), name: str = Form(""),
+                         ip: str = Form(""), stype: str = Form(""), note: str = Form("")):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/servers", status_code=303)
+    srv.update_server(orig_name, name, ip, stype, note)
+    return RedirectResponse("/servers", status_code=303)
+
+
+@app.post("/servers/ignore")
+async def servers_ignore(request: Request, name: str = Form("")):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/servers", status_code=303)
+    srv.add_ignore(name)
+    return RedirectResponse("/servers", status_code=303)
+
+
+@app.post("/servers/unignore")
+async def servers_unignore(request: Request, name: str = Form("")):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/servers", status_code=303)
+    srv.remove_ignore(name)
     return RedirectResponse("/servers", status_code=303)
 
 

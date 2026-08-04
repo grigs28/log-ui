@@ -12,10 +12,10 @@
 </div>
 
 <div class="grid g4">
-  <div class="tile"><div class="n">{{ "{:,}".format(data.total) }}</div><div class="l">日志总量 ({{data.days}} 天)</div></div>
-  <div class="tile err"><div class="n">{{ "{:,}".format(data.errors) }}</div><div class="l">错误 error</div></div>
-  <div class="tile warn"><div class="n">{{ "{:,}".format(data.warnings) }}</div><div class="l">警告 warning</div></div>
-  <div class="tile ok"><div class="n">{{ data.nhosts }}</div><div class="l">服务器数</div></div>
+  <div class="tile tile-info"><div class="n">{{ "{:,}".format(data.total) }}</div><div class="l">日志总量 ({{data.days}} 天)</div></div>
+  <div class="tile tile-err"><div class="n">{{ "{:,}".format(data.errors) }}</div><div class="l">错误 error</div></div>
+  <div class="tile tile-warn"><div class="n">{{ "{:,}".format(data.warnings) }}</div><div class="l">警告 warning</div></div>
+  <div class="tile tile-ok"><div class="n">{{ data.nhosts }}</div><div class="l">服务器数</div></div>
 </div>
 
 <div class="grid g2">
@@ -28,34 +28,6 @@
 </div>
 
 <script src="/static/echarts.min.js"></script>
-<script>
-var D = {{ data|tojson }};
-var ax = getComputedStyle(document.body).getPropertyValue('--muted') || '#888';
-function bar(id, dict, color){
-  var e = Object.entries(dict||{}).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  echarts.init(document.getElementById(id)).setOption({
-    grid:{left:10,right:30,top:10,bottom:5,containLabel:true},
-    xAxis:{type:'value',axisLine:{lineStyle:{color:ax}},splitLine:{lineStyle:{color:ax,opacity:.15}}},
-    yAxis:{type:'category',data:e.map(x=>x[0]).reverse(),axisLine:{lineStyle:{color:ax}}},
-    series:[{type:'bar',data:e.map(x=>x[1]).reverse(),itemStyle:{color:color}}],
-    tooltip:{trigger:'axis'}
-  });
-}
-var tr=(D.trend||[]).map(p=>[p[0]*1000,p[1]]);
-echarts.init(document.getElementById('trend')).setOption({
-  grid:{left:10,right:20,top:10,bottom:30,containLabel:true},color:['#2d5fb3'],
-  xAxis:{type:'time',axisLine:{lineStyle:{color:ax}}},
-  yAxis:{type:'value',axisLine:{lineStyle:{color:ax}},splitLine:{lineStyle:{color:ax,opacity:.15}}},
-  series:[{type:'line',data:tr,showSymbol:false,areaStyle:{opacity:.25}}],
-  tooltip:{trigger:'axis'}
-});
-var lv=Object.entries(D.by_level||{}).map(([k,v])=>({name:k,value:v}));
-var lvc={error:'#f85149',warning:'#d29922',info:'#58a6ff',debug:'#7d8590'};
-echarts.init(document.getElementById('level')).setOption({
-  series:[{type:'pie',radius:['45%','70%'],data:lv,color:lv.map(x=>lvc[x.name]||'#888'),label:{color:ax}}],
-  legend:{bottom:0,textStyle:{color:ax}}
-});
-bar('host', D.by_host, '#2d5fb3');
-bar('errhost', D.errors_by_host, '#f85149');
-</script>
+<script>var D = {{ data|tojson }};</script>
+<script src="/static/overview.js"></script>
 {% endblock %}

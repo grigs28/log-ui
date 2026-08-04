@@ -6,23 +6,26 @@ from .config import VL_URL
 
 
 def query_logs(expr: str = "*", limit: int = 100, start=None, end=None):
-    """LogsQL query -> list of log dicts (newest first)."""
+    """LogsQL query -> list of log dicts (newest first).  Returns [] on error."""
     params = {"query": expr, "limit": str(limit)}
     if start:
         params["start"] = str(start)
     if end:
         params["end"] = str(end)
-    r = httpx.get(f"{VL_URL}/select/logsql/query", params=params, timeout=30)
-    out = []
-    for line in r.text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
-            pass
-    return out
+    try:
+        r = httpx.get(f"{VL_URL}/select/logsql/query", params=params, timeout=30)
+        out = []
+        for line in r.text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+        return out
+    except Exception:
+        return []
 
 
 def field_values(field: str, expr: str = "*", limit: int = 100):
@@ -96,5 +99,6 @@ def stats_range(expr: str = "*", days: int = 7, step: str = "1h"):
 
 def last_seen(host: str):
     """Most recent _time for a host (None if no logs)."""
-    logs = query_logs(f'hostname:"{host}"', limit=1)
+    safe = host.replace('"', '\\"')  # escape double-quotes in LogsQL string
+    logs = query_logs(f'hostname:"{safe}"', limit=1)
     return logs[0].get("_time") if logs else None

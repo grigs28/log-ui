@@ -4,59 +4,26 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>{% block title %}log-ui{% endblock %}</title>
-  <style>
-    :root,.theme-dark{--bg:#0f1419;--fg:#d8dee9;--card:#161b22;--border:#2d3748;--input:#0d1117;--iborder:#30363d;--accent:#2d5fb3;--accent-h:#3673cf;--muted:#8b949e;--link:#8fbef2;--th:#161b22;--rb:#21262d;--err:#f85149;--warn:#d29922;--info:#58a6ff;--dbg:#7d8590;--ok:#3fb950;}
-    .theme-light{--bg:#f6f8fa;--fg:#1f2328;--card:#ffffff;--border:#d0d7de;--input:#f6f8fa;--iborder:#d0d7de;--accent:#0969da;--accent-h:#218bff;--muted:#57606a;--link:#0969da;--th:#fafbfc;--rb:#eaeef2;--err:#cf222e;--warn:#9a6700;--info:#0969da;--dbg:#57606a;--ok:#1a7f37;}
-    *{box-sizing:border-box;}
-    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--fg);font-size:14px;}
-    header{background:var(--card);padding:9px 18px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
-    header a{color:var(--link);text-decoration:none;}
-    header .title{font-weight:600;font-size:16px;color:var(--fg);margin-right:6px;}
-    header .spacer{flex:1;}
-    header .user{color:var(--muted);}
-    main{padding:16px 18px;max-width:1500px;margin:0 auto;}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;}
-    .grid{display:grid;gap:14px;}
-    .g4{grid-template-columns:repeat(4,1fr);} .g2{grid-template-columns:repeat(2,1fr);}
-    @media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr);}.g2{grid-template-columns:1fr;}}
-    .tile{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;}
-    .tile .n{font-size:28px;font-weight:700;}
-    .tile .l{color:var(--muted);font-size:12px;margin-top:4px;}
-    .err .n{color:var(--err);} .warn .n{color:var(--warn);} .ok .n{color:var(--ok);}
-    form .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
-    label{color:var(--muted);font-size:12px;display:block;margin-bottom:2px;}
-    select,input[type=text],input[type=number]{background:var(--input);color:var(--fg);border:1px solid var(--iborder);border-radius:5px;padding:5px 8px;}
-    button,.btn{background:var(--accent);color:#fff;border:0;padding:6px 14px;cursor:pointer;text-decoration:none;display:inline-block;border-radius:5px;}
-    button:hover,.btn:hover{background:var(--accent-h);}
-    .btn-muted{background:var(--muted);}
-    table{width:100%;border-collapse:collapse;}
-    th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--rb);vertical-align:top;}
-    th{color:var(--muted);font-weight:600;font-size:12px;background:var(--th);}
-    td.time,td.num{color:var(--muted);white-space:nowrap;font-family:ui-monospace,monospace;font-size:12px;}
-    td.num{text-align:right;} td.msg{word-break:break-word;}
-    .lv{font-weight:600;} .lv-error{color:var(--err);} .lv-warning{color:var(--warn);} .lv-info{color:var(--info);} .lv-debug{color:var(--dbg);}
-    .meta{color:var(--muted);font-size:12px;}
-    code{background:var(--input);padding:1px 5px;border-radius:4px;}
-    .chart{width:100%;height:300px;}
-    .logpane{max-height:calc(100vh - 150px);overflow:auto;}
-    .tag{display:inline-block;background:var(--input);border:1px solid var(--iborder);border-radius:10px;padding:1px 8px;font-size:11px;color:var(--muted);}
-    .tag.ok{color:var(--ok);border-color:var(--ok);} .tag.warn{color:var(--warn);border-color:var(--warn);} .tag.err{color:var(--err);border-color:var(--err);}
-  </style>
+  <link rel="stylesheet" href="/static/log-ui.css">
 </head>
 <body class="theme-{{ theme or 'dark' }}">
   <header>
-    <span class="title">📋 日志总览</span>
-    <a href="/">总览</a>
-    <a href="/search">日志</a>
-    <a href="/servers">服务器</a>
-    <a href="/tail">实时</a>
-    <a href="/settings">设置</a>
+    <span class="title"><span class="dot"></span>log‑ui</span>
+    <nav>
+      <a href="/">总览</a>
+      <a href="/search">日志</a>
+      <a href="/servers">服务器</a>
+      <a href="/tail">实时</a>
+      <a href="/settings">设置</a>
+    </nav>
     <span class="spacer"></span>
     {% if user %}
-      <span class="user">👤 {{ user.display_name or user.username }}{% if user.is_admin %} · admin{% endif %}</span>
-      <a href="/auth/logout">登出</a>
+      <span class="user">👤 <span>{{ user.display_name or user.username }}</span>{% if user.is_admin %} · 管理{% endif %}</span>
+      <a href="/auth/logout" class="btn btn-muted" style="padding:4px 10px;font-size:12px">登出</a>
     {% endif %}
   </header>
-  <main>{% block content %}{% endblock %}</main>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

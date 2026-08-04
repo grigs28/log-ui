@@ -59,6 +59,7 @@ source = """
   ._time = to_unix_timestamp(.parsed_ts, unit: "milliseconds") - (8 * 3600 * 1000)
   ._msg = .message
   .log_source = .host || "taf"
+  .hostname = "taf"
   del(.timestamp)
   del(.ts)
   del(.parsed_ts)

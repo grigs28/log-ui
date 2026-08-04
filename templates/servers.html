@@ -2,27 +2,33 @@
 {% block title %}服务器 · log-ui{% endblock %}
 {% block content %}
 <div class="card">
-  <h3 style="margin-top:0">服务器纳管 <span class="meta">（注册 + 自动发现，按 7 天日志量排序）</span></h3>
+  <h3 style="margin-top:0">服务器纳管 <span class="meta">（注册 + 自动发现，名称 = 日志 hostname，点击名称可查该服务器日志）</span></h3>
   <div class="logpane">
   <table>
     <tr><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
     {% for r in rows %}
     <tr>
-      <td>{{ r.name }} {% if not r.registered %}<span class="tag">未注册</span>{% endif %}</td>
+      <td><a href="/search?host={{ r.name }}">{{ r.name }}</a> {% if not r.registered %}<span class="tag">未注册</span>{% endif %}</td>
       <td class="num">{{ r.ip or '-' }}</td>
       <td>{{ r.type or '-' }}</td>
       <td class="meta">{{ r.note }}</td>
-      <td>{% if r.count > 0 %}<span class="tag ok">活跃</span>{% else %}<span class="tag warn">静默</span>{% endif %}</td>
+      <td><span class="dot {{ 'ok' if r.count > 0 else 'warn' }}"></span> {{ '活跃' if r.count > 0 else '静默' }}</td>
       <td class="num">{{ "{:,}".format(r.count) }}</td>
       <td class="num">{% if r.errors %}<span class="lv lv-error">{{ r.errors }}</span>{% else %}0{% endif %}</td>
       <td class="time">{{ r.last_seen or '-' }}</td>
-      {% if is_admin %}<td>
+      {% if is_admin %}<td style="white-space:nowrap">
+        <a href="/servers?edit={{ r.name }}" class="btn btn-muted" style="padding:2px 8px">编辑</a>
         {% if r.registered %}
         <form method="post" action="/servers/delete" style="display:inline">
           <input type="hidden" name="name" value="{{ r.name }}">
           <button class="btn btn-muted" style="padding:2px 8px">移除</button>
         </form>
-        {% else %}<span class="meta">-</span>{% endif %}
+        {% else %}
+        <form method="post" action="/servers/ignore" style="display:inline">
+          <input type="hidden" name="name" value="{{ r.name }}">
+          <button class="btn btn-muted" style="padding:2px 8px">忽略</button>
+        </form>
+        {% endif %}
       </td>{% endif %}
     </tr>
     {% endfor %}
@@ -31,7 +37,20 @@
 </div>
 
 {% if is_admin %}
-<div class="card" style="max-width:720px">
+{% if edit_entry %}
+<div class="card" style="max-width:760px">
+  <h3 style="margin-top:0">{% if edit_is_registered %}编辑服务器：{{ edit_entry.name }}{% else %}登记服务器：{{ edit_entry.name }}{% endif %}</h3>
+  <form method="post" action="{% if edit_is_registered %}/servers/update{% else %}/servers/add{% endif %}" class="row">
+    {% if edit_is_registered %}<input type="hidden" name="orig_name" value="{{ edit_entry.name }}">{% endif %}
+    <div><label>名称（须与 hostname 一致）</label><input type="text" name="name" value="{{ edit_entry.name }}" required></div>
+    <div><label>IP</label><input type="text" name="ip" value="{{ edit_entry.ip }}"></div>
+    <div><label>类型</label><input type="text" name="stype" value="{{ edit_entry.type }}"></div>
+    <div><label>备注</label><input type="text" name="note" value="{{ edit_entry.note }}"></div>
+    <div><button>保存</button> <a href="/servers" class="btn btn-muted">取消</a></div>
+  </form>
+</div>
+{% else %}
+<div class="card" style="max-width:760px">
   <h3 style="margin-top:0">添加 / 注册服务器</h3>
   <form method="post" action="/servers/add" class="row">
     <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
@@ -40,9 +59,27 @@
     <div><label>备注</label><input type="text" name="note"></div>
     <div><button>添加</button></div>
   </form>
-  <p class="meta">名称须与该设备日志里的 <code>hostname</code> 字段一致才能匹配统计/健康。自动发现的主机也可在此登记。</p>
 </div>
+{% endif %}
+
+{% if ignored %}
+<div class="card" style="max-width:600px">
+  <details><summary><span style="color:var(--muted)">已忽略 {{ ignored|length }} 个主机（点击展开）</span></summary>
+  <ul style="margin-top:8px">
+  {% for h in ignored %}
+    <li style="margin-bottom:4px">{{ h }}
+      <form method="post" action="/servers/unignore" style="display:inline;margin-left:8px">
+        <input type="hidden" name="name" value="{{ h }}">
+        <button class="btn btn-muted" style="padding:1px 8px">恢复</button>
+      </form>
+    </li>
+  {% endfor %}
+  </ul>
+  </details>
+</div>
+{% endif %}
+
 {% else %}
-<p class="meta">仅管理员可增删服务器。</p>
+<p class="meta">仅管理员可增删改服务器。</p>
 {% endif %}
 {% endblock %}
