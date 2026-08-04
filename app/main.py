@@ -73,11 +73,12 @@ def overview(request: Request, days: int = 7):
     from . import servers as srv_ov
     reg_names = {s["name"] for s in srv_ov.load_registry()}
     by_host_raw = vl.stats_by("hostname", days)
-    by_host_f = {k: v for k, v in by_host_raw.items() if k in reg_names}
+    by_host_f = {n: by_host_raw.get(n, 0) for n in reg_names}
     by_err_raw = vl.stats_by("hostname", days, "level:error")
-    by_err_f = {k: v for k, v in by_err_raw.items() if k in reg_names}
+    # ensure every registered server appears (0 if no errors)
+    by_err_f = {n: by_err_raw.get(n, 0) for n in reg_names}
     by_warn_raw = vl.stats_by("hostname", days, "level:warning")
-    by_warn_f = {k: v for k, v in by_warn_raw.items() if k in reg_names}
+    by_warn_f = {n: by_warn_raw.get(n, 0) for n in reg_names}
     data = {
         "days": days,
         "total": sum(by_host_f.values()),
