@@ -75,9 +75,9 @@ def overview(request: Request, days: int = 7):
     by_host_raw = vl.stats_by("hostname", days)
     by_host_f  = {k: v for k, v in by_host_raw.items() if k and k != "(none)" and k not in ignored_set}
     by_err_raw = vl.stats_by("hostname", days, "level:error")
-    by_err_f   = {k: v for k, v in by_err_raw.items()  if k and k != "(none)" and k not in ignored_set}
+    by_err_f   = {k: by_err_raw.get(k, 0) for k in by_host_f}   # 0-error hosts included
     by_warn_raw= vl.stats_by("hostname", days, "level:warning")
-    by_warn_f  = {k: v for k, v in by_warn_raw.items() if k and k != "(none)" and k not in ignored_set}
+    by_warn_f  = {k: by_warn_raw.get(k, 0) for k in by_host_f}
     data = {
         "days": days,
         "total": sum(by_host_f.values()),
