@@ -92,7 +92,7 @@ def parse_line(line):
         "_msg": line,
         "_time": timestamp,
         "app_name": "cobian-backup",
-        "hostname": "OpenEuler-Log-AI",
+        "hostname": source_host or "192.168.0.28",
         "level": level,
         "cobian_source": source_host or "192.168.0.28",
         "cobian_task": task_name,
