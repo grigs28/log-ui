@@ -92,7 +92,7 @@ def parse_line(line):
         "_msg": line,
         "_time": timestamp,
         "app_name": "cobian-backup",
-        "hostname": source_host or "192.168.0.28",
+        "hostname": "192.168.0.28",  #  Cobian 引擎本机，不按源 IP 散开
         "level": level,
         "cobian_source": source_host or "192.168.0.28",
         "cobian_task": task_name,
