@@ -76,11 +76,13 @@ def overview(request: Request, days: int = 7):
     by_host_f = {k: v for k, v in by_host_raw.items() if k in reg_names}
     by_err_raw = vl.stats_by("hostname", days, "level:error")
     by_err_f = {k: v for k, v in by_err_raw.items() if k in reg_names}
+    by_warn_raw = vl.stats_by("hostname", days, "level:warning")
+    by_warn_f = {k: v for k, v in by_warn_raw.items() if k in reg_names}
     data = {
         "days": days,
-        "total": vl.stats_total("*", days),
-        "errors": vl.stats_total("level:error", days),
-        "warnings": vl.stats_total("level:warning", days),
+        "total": sum(by_host_f.values()),
+        "errors": sum(by_err_f.values()),
+        "warnings": sum(by_warn_f.values()),
         "nhosts": len(by_host_f),
         "by_level": vl.stats_by("level", days),
         "by_host": by_host_f,
