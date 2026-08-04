@@ -1,5 +1,5 @@
 {# log table fragment — included by index.html, returned by /logs (auto-refresh poll) #}
-<div class="card" style="padding:0;overflow:hidden">
+<div class="card logpane" style="padding:0">
   <table>
     <tr><th>时间</th><th>等级</th><th>服务器</th><th>来源</th><th>消息</th></tr>
     {% for log in logs %}

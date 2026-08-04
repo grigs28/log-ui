@@ -5,27 +5,31 @@
   <h3 style="margin:0">实时日志流 (tail)</h3>
   <span class="meta" id="status">连接中…</span>
   <label><input type="checkbox" id="autoscroll" checked> 自动滚动</label>
+  <button class="btn btn-muted" style="padding:3px 10px" onclick="clr()">清空</button>
 </div>
-<div class="card" style="padding:0;overflow:hidden">
+<div id="pane" class="card logpane" style="padding:0">
   <table id="stream"><tr><th>时间</th><th>等级</th><th>服务器</th><th>来源</th><th>消息</th></tr></table>
 </div>
 <script>
 var ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/tail');
+var pane = document.getElementById('pane');
 var tb = document.getElementById('stream');
 var st = document.getElementById('status');
+var MAX = 300;
 ws.onopen  = function(){ st.textContent='● 已连接'; st.style.color='var(--ok)'; };
 ws.onclose = function(){ st.textContent='○ 已断开（刷新重连）'; st.style.color='var(--err)'; };
 ws.onerror = function(){ st.textContent='连接错误'; st.style.color='var(--err)'; };
 ws.onmessage = function(ev){
   var d = JSON.parse(ev.data);
-  var tr = tb.insertRow(1);  // 紧跟表头 = 最新在上
+  var tr = tb.insertRow(-1);  // 追加到底部 = 最新在底
   tr.innerHTML = '<td class="time">'+d.time+'</td>'
     + '<td><span class="lv lv-'+d.level+'">'+d.level+'</span></td>'
     + '<td>'+d.host+'</td><td class="meta">'+d.app+'</td>'
     + '<td class="msg">'+escapeHtml(d.msg)+'</td>';
-  while (tb.rows.length > 300) tb.deleteRow(tb.rows.length-1);
-  if (document.getElementById('autoscroll').checked) window.scrollTo(0, document.body.scrollHeight);
+  while (tb.rows.length > MAX+1) tb.deleteRow(1);  // 超量删最旧（表头之后）
+  if (document.getElementById('autoscroll').checked) pane.scrollTop = pane.scrollHeight;
 };
+function clr(){ while (tb.rows.length > 1) tb.deleteRow(1); }
 function escapeHtml(s){ return (s||'').replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
 </script>
 {% endblock %}
