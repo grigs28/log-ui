@@ -1,6 +1,7 @@
 [sources.journald]
 type = "journald"
 exclude_units = ["vector.service"]
+include_matches = { PRIORITY = ["0","1","2","3","4"] }
 
 [sources.syslog]
 type = "syslog"
