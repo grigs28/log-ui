@@ -4,7 +4,7 @@ import json
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -48,14 +48,24 @@ def _build_expr(q: str, host: str, level: str) -> str:
     return " ".join(parts) if parts else "*"
 
 
+# ---- CSRF protection for state-changing endpoints ----
+def csrf_protect(request: Request):
+    """Reject cross-origin POST requests (defense-in-depth; same_site=lax also applies)."""
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    origin = request.headers.get("origin")
+    if origin and origin != f"{request.url.scheme}://{request.url.netloc}":
+        raise HTTPException(status_code=403, detail="CSRF check failed")
+
+
 @app.get("/favicon.ico")
-async def favicon():
+def favicon():
     return Response(status_code=204)
 
 
 # ---------------- 总览大屏 ----------------
 @app.get("/")
-async def overview(request: Request, days: int = 7):
+def overview(request: Request, days: int = 7):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -78,9 +88,9 @@ async def overview(request: Request, days: int = 7):
     )
 
 
-# ---------------- 日志搜索 (原 / ) ----------------
+# ---------------- 日志搜索 ----------------
 @app.get("/search")
-async def search(
+def search(
     request: Request, ticket: str | None = None, q: str = "*",
     host: str | None = None, level: str = "ALL",
     limit: int | None = None, refresh: int | None = None,
@@ -106,8 +116,8 @@ async def search(
 
 
 @app.get("/logs")
-async def logs_fragment(request: Request, q: str = "*", host: str = "ALL",
-                        level: str = "ALL", limit: int = 100):
+def logs_fragment(request: Request, q: str = "*", host: str = "ALL",
+                  level: str = "ALL", limit: int = 100):
     if not _require_user(request):
         return Response("Unauthorized", status_code=401)
     expr = _build_expr(q, host, level)
@@ -117,30 +127,31 @@ async def logs_fragment(request: Request, q: str = "*", host: str = "ALL",
 
 # ---------------- 服务器管理 ----------------
 @app.get("/servers")
-async def servers_page(request: Request, edit: str | None = None):
+def servers_page(request: Request, edit: str | None = None):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     registry = srv.load_registry()
     ignored = set(srv.load_ignore())
     reg_names = {s.get("name") for s in registry}
-    by_host = vl.stats_by("hostname", 7)
-    errors_by_host = vl.stats_by("hostname", 7, "level:error")
     all_hosts = [h for h in vl.field_values("hostname", limit=200) if h]
+    summary = vl.host_summary()  # batch: 2 queries for ALL hosts
 
     rows = []
     for s in registry:
         n = s.get("name", "")
+        hs = summary.get(n, {})
         rows.append({"name": n, "ip": s.get("ip", ""), "type": s.get("type", ""),
                      "note": s.get("note", ""), "registered": True,
-                     "count": by_host.get(n, 0), "errors": errors_by_host.get(n, 0),
-                     "last_seen": vl.last_seen(n)})
+                     "count": hs.get("count", 0), "errors": hs.get("errors", 0),
+                     "last_seen": hs.get("last_seen")})
     for h in all_hosts:
         if h in reg_names or h in ignored:
             continue
+        hs = summary.get(h, {})
         rows.append({"name": h, "ip": "", "type": "", "note": "", "registered": False,
-                     "count": by_host.get(h, 0), "errors": errors_by_host.get(h, 0),
-                     "last_seen": vl.last_seen(h)})
+                     "count": hs.get("count", 0), "errors": hs.get("errors", 0),
+                     "last_seen": hs.get("last_seen")})
     rows.sort(key=lambda r: r["count"], reverse=True)
 
     edit_entry = None
@@ -161,8 +172,9 @@ async def servers_page(request: Request, edit: str | None = None):
 
 
 @app.post("/servers/add")
-async def servers_add(request: Request, name: str = Form(""), ip: str = Form(""),
-                      stype: str = Form(""), note: str = Form("")):
+def servers_add(request: Request, name: str = Form(""), ip: str = Form(""),
+                stype: str = Form(""), note: str = Form(""),
+                csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -173,7 +185,8 @@ async def servers_add(request: Request, name: str = Form(""), ip: str = Form("")
 
 
 @app.post("/servers/delete")
-async def servers_delete(request: Request, name: str = Form("")):
+def servers_delete(request: Request, name: str = Form(""),
+                   csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -184,8 +197,9 @@ async def servers_delete(request: Request, name: str = Form("")):
 
 
 @app.post("/servers/update")
-async def servers_update(request: Request, orig_name: str = Form(""), name: str = Form(""),
-                         ip: str = Form(""), stype: str = Form(""), note: str = Form("")):
+def servers_update(request: Request, orig_name: str = Form(""), name: str = Form(""),
+                   ip: str = Form(""), stype: str = Form(""), note: str = Form(""),
+                   csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -196,7 +210,8 @@ async def servers_update(request: Request, orig_name: str = Form(""), name: str 
 
 
 @app.post("/servers/ignore")
-async def servers_ignore(request: Request, name: str = Form("")):
+def servers_ignore(request: Request, name: str = Form(""),
+                   csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -207,7 +222,8 @@ async def servers_ignore(request: Request, name: str = Form("")):
 
 
 @app.post("/servers/unignore")
-async def servers_unignore(request: Request, name: str = Form("")):
+def servers_unignore(request: Request, name: str = Form(""),
+                     csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -219,7 +235,7 @@ async def servers_unignore(request: Request, name: str = Form("")):
 
 # ---------------- 实时 tail (WebSocket) ----------------
 @app.get("/tail")
-async def tail_page(request: Request):
+def tail_page(request: Request):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -254,7 +270,7 @@ async def ws_tail(ws: WebSocket):
 
 # ---------------- 设置 ----------------
 @app.get("/settings")
-async def settings_get(request: Request):
+def settings_get(request: Request):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -267,8 +283,9 @@ async def settings_get(request: Request):
 
 
 @app.post("/settings")
-async def settings_post(request: Request, refresh_sec: int = Form(10),
-                        limit: int = Form(100), theme: str = Form("dark")):
+def settings_post(request: Request, refresh_sec: int = Form(10),
+                  limit: int = Form(100), theme: str = Form("dark"),
+                  csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -282,7 +299,9 @@ async def settings_post(request: Request, refresh_sec: int = Form(10),
 
 
 @app.post("/settings/sso")
-async def settings_sso_post(request: Request, yz_login_url: str = Form(""), yz_app_id: str = Form("")):
+def settings_sso_post(request: Request, yz_login_url: str = Form(""),
+                      yz_app_id: str = Form(""),
+                      csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)

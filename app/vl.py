@@ -97,6 +97,46 @@ def stats_range(expr: str = "*", days: int = 7, step: str = "1h"):
         return []
 
 
+def host_summary(days: int = 7):
+    """{hostname: {"count":int,"errors":int,"last_seen":str|None}} — batch (2 queries total)."""
+    s, e = _range(days)
+    summary = {}
+    # combined: count + max(_time) per host
+    try:
+        r = httpx.get(
+            f"{VL_URL}/select/logsql/stats_query",
+            params={"query": f"* | stats by(hostname) count(), max(_time)", "start": s, "end": e},
+            timeout=30,
+        )
+        for res in r.json().get("data", {}).get("result", []):
+            h = res["metric"].get("hostname") or "(none)"
+            name = res["metric"].get("__name__")
+            val = res["value"][1]
+            if h not in summary:
+                summary[h] = {"count": 0, "errors": 0, "last_seen": None}
+            if name == "count(*)":
+                summary[h]["count"] = int(float(val))
+            elif name == "max(_time)":
+                summary[h]["last_seen"] = val
+    except Exception:
+        pass
+    # errors per host
+    try:
+        r = httpx.get(
+            f"{VL_URL}/select/logsql/stats_query",
+            params={"query": f"level:error | stats by(hostname) count()", "start": s, "end": e},
+            timeout=30,
+        )
+        for res in r.json().get("data", {}).get("result", []):
+            h = res["metric"].get("hostname") or "(none)"
+            if h not in summary:
+                summary[h] = {"count": 0, "errors": 0, "last_seen": None}
+            summary[h]["errors"] = int(float(res["value"][1]))
+    except Exception:
+        pass
+    return summary
+
+
 def last_seen(host: str):
     """Most recent _time for a host (None if no logs)."""
     safe = host.replace('"', '\\"')  # escape double-quotes in LogsQL string

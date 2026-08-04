@@ -1,10 +1,11 @@
-version: '3.7'
+
+
 
 services:
   victorialogs:
     image: victoriametrics/victoria-logs:v1.48.0
     container_name: victorialogs
-    restart: always
+    restart: unless-stopped
     ports:
       - "9428:9428"  # 写入端口（Vector 用）
       - "9242:9242"  # 查询端口（Grafana 用）
@@ -20,7 +21,7 @@ services:
   vector:
     image: timberio/vector:0.54.0-debian
     container_name: vector
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./vector.toml:/etc/vector/vector.toml:ro
       - ./scripts:/opt/logging/scripts:ro
@@ -42,7 +43,7 @@ services:
   grafana:
     image: grafana/grafana:12.4
     container_name: grafana
-    restart: always
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
