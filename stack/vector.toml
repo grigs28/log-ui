@@ -1,7 +1,12 @@
 [sources.journald]
 type = "journald"
 exclude_units = ["vector.service"]
-include_matches = { PRIORITY = ["0","1","2","3","4"] }
+
+
+[transforms.vlogs_filter]
+type = "filter"
+inputs = ["vlogs_prep"]
+condition = '.level != "info" && .level != "debug" && .level != "notice"'
 
 [sources.syslog]
 type = "syslog"
@@ -85,7 +90,7 @@ source = """
 
 [sinks.victorialogs]
 type = "http"
-inputs = ["vlogs_prep", "syslog_prep", "taf_prep", "rclone_prep"]
+inputs = ["vlogs_filter", "syslog_prep", "taf_prep", "rclone_prep"]
 uri = "http://victorialogs:9428/insert/jsonline"
 method = "post"
 encoding.codec = "json"
