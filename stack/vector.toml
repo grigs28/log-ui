@@ -1,0 +1,94 @@
+[sources.journald]
+type = "journald"
+exclude_units = ["vector.service"]
+
+[sources.syslog]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+[sources.taf_udp]
+type = "socket"
+address = "0.0.0.0:515"
+mode = "udp"
+decoding.codec = "json"
+
+[sources.rclone_syslog]
+type = "syslog"
+address = "0.0.0.0:516"
+mode = "tcp"
+
+[transforms.vlogs_prep]
+type = "remap"
+inputs = ["journald"]
+source = """
+  . = {
+    "_msg": .message,
+    "_time": to_unix_timestamp!(.timestamp, unit: "milliseconds"),
+    "hostname": .host,
+    "app_name": .unit || .container_name || .syslog_identifier || .SYSLOG_IDENTIFIER || .app_name || "unknown",
+    "level": .level || "info",
+    "log_source": "local"
+  }
+"""
+
+[transforms.syslog_prep]
+type = "remap"
+inputs = ["syslog"]
+source = """
+  ts = .timestamp
+  unix_ts = to_unix_timestamp!(ts, unit: "seconds") - 28800.0
+  . = {
+    "_msg": .message,
+    "_time": unix_ts * 1000.0,
+    "hostname": .hostname || .host || "unknown",
+    "app_name": .appname || .app_name || .syslog_facility || "syslog",
+    "level": .severity || .level || "info",
+    "log_source": .hostname || .host || "unknown"
+  }
+"""
+
+[transforms.taf_prep]
+type = "remap"
+inputs = ["taf_udp"]
+source = """
+  .ts = replace!(.timestamp, "Z", "")
+  .parsed_ts = parse_timestamp!(.ts, "%Y-%m-%dT%H:%M:%S.%f")
+  # TAF 发的是本地时间 (CST/UTC+8) 但没带时区，parse_timestamp 当 UTC 处理
+  # 所以 _time 会偏移 +8h，这里减去 8 小时纠正
+  ._time = to_unix_timestamp(.parsed_ts, unit: "milliseconds") - (8 * 3600 * 1000)
+  ._msg = .message
+  .log_source = .host || "taf"
+  del(.timestamp)
+  del(.ts)
+  del(.parsed_ts)
+  del(.message)
+"""
+
+[transforms.rclone_prep]
+type = "remap"
+inputs = ["rclone_syslog"]
+source = """
+  ts = .timestamp
+  unix_ts = to_unix_timestamp!(ts, unit: "seconds") - 28800.0
+  . = {
+    "_msg": .message,
+    "_time": unix_ts * 1000.0,
+    "hostname": .hostname || .host || "unknown",
+    "app_name": "rclone-backup",
+    "level": .severity || .level || "info",
+    "log_source": .hostname || .host || "unknown"
+  }
+"""
+
+[sinks.victorialogs]
+type = "http"
+inputs = ["vlogs_prep", "syslog_prep", "taf_prep", "rclone_prep"]
+uri = "http://victorialogs:9428/insert/jsonline"
+method = "post"
+encoding.codec = "json"
+framing.method = "newline_delimited"
+request.concurrency = "adaptive"
+batch.max_bytes = 1048576
+batch.max_events = 500
+buffer.max_events = 10000

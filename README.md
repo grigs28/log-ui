@@ -144,6 +144,16 @@ log-ui/
 
 ---
 
+## stack/ — 底层 Docker 部署方案
+
+`stack/` 是底层日志栈（VictoriaLogs + Vector + Grafana）的 docker-compose 部署方案：
+- `stack/docker-compose.yml`（三服务）· `stack/vector.toml`（采集管道）· `stack/provisioning/`（Grafana 数据源）· `stack/scripts/cobian_log_reader.py`（Cobian 采集器）
+- **`stack/DEPLOY.md`** —— 完整部署步骤 + 关键坑（docker-engine 18.09 / CPU 指令集、firewalld trusted 区、Cobian 宿主采集、时区/字段约定等）
+
+即本仓库 = **log-ui（展示层）+ stack/（采集存储层）= 完整日志方案**。
+
+---
+
 ## 技术栈
 
 - **后端**：Python FastAPI + uvicorn

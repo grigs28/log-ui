@@ -1,0 +1,62 @@
+version: '3.7'
+
+services:
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.48.0
+    container_name: victorialogs
+    restart: always
+    ports:
+      - "9428:9428"  # 写入端口（Vector 用）
+      - "9242:9242"  # 查询端口（Grafana 用）
+    volumes:
+      - /opt/logging/victorialogs-data:/victoria-logs-data
+    command:
+      - -storageDataPath=/victoria-logs-data
+      - -httpListenAddr=:9428
+      - -retentionPeriod=180d
+    networks:
+      - logging
+
+  vector:
+    image: timberio/vector:0.54.0-debian
+    container_name: vector
+    restart: always
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml:ro
+      - ./scripts:/opt/logging/scripts:ro
+      - /var/log:/var/log:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /mnt/cobian-logs:/mnt/cobian-logs:ro
+      - /opt/conda3/envs/log-ai/bin:/opt/conda3/envs/log-ai/bin:ro
+      - /opt/conda3/envs/log-ai/lib:/opt/conda3/envs/log-ai/lib:ro
+    ports:
+      - "514:514/udp"
+      - "515:515/udp"
+      - "516:516/tcp"
+    command: --config /etc/vector/vector.toml
+    depends_on:
+      - victorialogs
+    networks:
+      - logging
+
+  grafana:
+    image: grafana/grafana:12.4
+    container_name: grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - /opt/logging/grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=CHANGE_ME
+      - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource
+    depends_on:
+      - victorialogs
+    networks:
+      - logging
+
+networks:
+  logging:
+    driver: bridge
