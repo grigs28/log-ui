@@ -2,7 +2,42 @@
 {% block title %}服务器 · log-ui{% endblock %}
 {% block content %}
 <div class="card">
-  <h3 style="margin-top:0">服务器纳管 <span class="meta">（注册 + 自动发现，名称 = 日志 hostname，点击名称可查该服务器日志）</span></h3>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <h3 style="margin:0">服务器纳管</h3>
+    <span class="meta">（注册 + 自动发现，名称 = 日志 hostname，点击名称可查该服务器日志）</span>
+    {% if is_admin and not edit_entry %}
+    <span class="spacer"></span>
+    <button onclick="document.getElementById('addrow').style.display='block';this.style.display='none'">＋ 添加 / 注册服务器</button>
+    {% endif %}
+  </div>
+
+  {% if is_admin and edit_entry %}
+  <div class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent)">
+    <h3 style="margin-top:0">{% if edit_is_registered %}编辑服务器：{{ edit_entry.name }}{% else %}登记服务器：{{ edit_entry.name }}{% endif %}</h3>
+    <form method="post" action="{% if edit_is_registered %}/servers/update{% else %}/servers/add{% endif %}" class="row">
+      {% if edit_is_registered %}<input type="hidden" name="orig_name" value="{{ edit_entry.name }}">{% endif %}
+      <div><label>名称（须与 hostname 一致）</label><input type="text" name="name" value="{{ edit_entry.name }}" required></div>
+      <div><label>IP</label><input type="text" name="ip" value="{{ edit_entry.ip }}"></div>
+      <div><label>类型</label><input type="text" name="stype" value="{{ edit_entry.type }}"></div>
+      <div><label>备注</label><input type="text" name="note" value="{{ edit_entry.note }}"></div>
+      <div><button>保存</button> <a href="/servers" class="btn btn-muted">取消</a></div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if is_admin and not edit_entry %}
+  <div id="addrow" class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent);display:none">
+    <h3 style="margin-top:0">添加 / 注册服务器</h3>
+    <form method="post" action="/servers/add" class="row">
+      <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
+      <div><label>IP</label><input type="text" name="ip"></div>
+      <div><label>类型</label><input type="text" name="stype" placeholder="server_linux/nas/firewall"></div>
+      <div><label>备注</label><input type="text" name="note"></div>
+      <div><button>添加</button> <a href="/servers" class="btn btn-muted">取消</a></div>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="logpane">
   <table>
     <tr><th>#</th><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
@@ -38,31 +73,6 @@
 </div>
 
 {% if is_admin %}
-{% if edit_entry %}
-<div class="card" style="max-width:760px">
-  <h3 style="margin-top:0">{% if edit_is_registered %}编辑服务器：{{ edit_entry.name }}{% else %}登记服务器：{{ edit_entry.name }}{% endif %}</h3>
-  <form method="post" action="{% if edit_is_registered %}/servers/update{% else %}/servers/add{% endif %}" class="row">
-    {% if edit_is_registered %}<input type="hidden" name="orig_name" value="{{ edit_entry.name }}">{% endif %}
-    <div><label>名称（须与 hostname 一致）</label><input type="text" name="name" value="{{ edit_entry.name }}" required></div>
-    <div><label>IP</label><input type="text" name="ip" value="{{ edit_entry.ip }}"></div>
-    <div><label>类型</label><input type="text" name="stype" value="{{ edit_entry.type }}"></div>
-    <div><label>备注</label><input type="text" name="note" value="{{ edit_entry.note }}"></div>
-    <div><button>保存</button> <a href="/servers" class="btn btn-muted">取消</a></div>
-  </form>
-</div>
-{% else %}
-<div class="card" style="max-width:760px">
-  <h3 style="margin-top:0">添加 / 注册服务器</h3>
-  <form method="post" action="/servers/add" class="row">
-    <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
-    <div><label>IP</label><input type="text" name="ip"></div>
-    <div><label>类型</label><input type="text" name="stype" placeholder="server_linux/nas/firewall"></div>
-    <div><label>备注</label><input type="text" name="note"></div>
-    <div><button>添加</button></div>
-  </form>
-</div>
-{% endif %}
-
 {% if ignored %}
 <div class="card" style="max-width:600px">
   <details><summary><span style="color:var(--muted)">已忽略 {{ ignored|length }} 个主机（点击展开）</span></summary>
