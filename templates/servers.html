@@ -5,9 +5,10 @@
   <h3 style="margin-top:0">服务器纳管 <span class="meta">（注册 + 自动发现，名称 = 日志 hostname，点击名称可查该服务器日志）</span></h3>
   <div class="logpane">
   <table>
-    <tr><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
+    <tr><th>#</th><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
     {% for r in rows %}
     <tr>
+      <td class="num" style="color:var(--muted)">{{ loop.index }}</td>
       <td><a href="/search?host={{ r.name }}">{{ r.name }}</a> {% if not r.registered %}<span class="tag">未注册</span>{% endif %}</td>
       <td class="num">{{ r.ip or '-' }}</td>
       <td>{{ r.type or '-' }}</td>
