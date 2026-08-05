@@ -3,11 +3,6 @@ type = "journald"
 exclude_units = ["vector.service"]
 
 
-[transforms.vlogs_filter]
-type = "filter"
-inputs = ["vlogs_prep"]
-condition = '.level != "info" && .level != "debug" && .level != "notice"'
-
 [sources.syslog]
 type = "syslog"
 address = "0.0.0.0:514"
@@ -88,9 +83,41 @@ source = """
   }
 """
 
+[transforms.level_normalize]
+type = "remap"
+inputs = ["syslog_prep", "rclone_prep", "vlogs_prep"]
+source = """
+  # level 归一化：err/crit/critical/alert/emerg → error；warn → warning；debug/trace → debug；其余 → info
+  lvl = .level || "info"
+  .level = if lvl == "err" || lvl == "crit" || lvl == "critical" || lvl == "alert" || lvl == "emerg" {
+    "error"
+  } else if lvl == "warn" {
+    "warning"
+  } else if lvl == "debug" || lvl == "trace" {
+    "debug"
+  } else {
+    "info"
+  }
+  .level = if lvl == "err" || lvl == "crit" || lvl == "critical" || lvl == "alert" || lvl == "emerg" {
+    "error"
+  } else if lvl == "warn" {
+    "warning"
+  } else if lvl == "debug" || lvl == "trace" {
+    "debug"
+  } else {
+    "info"
+  }
+"""
+
+[transforms.journald_filter]
+type = "filter"
+inputs = ["level_normalize"]
+# OpenEuler-Log-AI（journald）只保留 warning+，过滤 info/debug/notice 噪声
+condition = '.hostname != "OpenEuler-Log-AI" || (.level != "info" && .level != "debug" && .level != "notice")'
+
 [sinks.victorialogs]
 type = "http"
-inputs = ["vlogs_filter", "syslog_prep", "taf_prep", "rclone_prep"]
+inputs = ["journald_filter", "taf_prep", "rclone_prep"]
 uri = "http://victorialogs:9428/insert/jsonline"
 method = "post"
 encoding.codec = "json"
