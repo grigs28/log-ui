@@ -65,7 +65,9 @@ def favicon():
 
 # ---------------- 总览大屏 ----------------
 @app.get("/")
-def overview(request: Request, days: int = 7):
+def overview(request: Request, days: int = 7, ticket: str | None = None):
+    if ticket:
+        return handle_ticket(request, ticket)
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
