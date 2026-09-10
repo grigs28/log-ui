@@ -2,7 +2,11 @@
 {% block title %}Changelog · log-ui{% endblock %}
 {% block content %}
 <div class="card" style="max-width:860px;margin:0 auto">
-  <h2 style="margin-top:0">📝 更新日志 <span class="meta">v{{ version }}</span></h2>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <h2 style="margin:0">📝 更新日志 <span class="meta">v{{ version }}</span></h2>
+    <span style="flex:1"></span>
+    <a href="/" class="btn btn-muted">✕ 关闭</a>
+  </div>
   <div id="md" style="line-height:1.7"></div>
 </div>
 <script src="/static/md.min.js"></script>
