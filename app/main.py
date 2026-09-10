@@ -82,6 +82,19 @@ def app_version():
     return {"version": _app_version()}
 
 
+@app.get("/changelog")
+def changelog(request: Request):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    try:
+        md = (BASE / "CHANGELOG.md").read_text(encoding="utf-8")
+    except Exception:
+        md = "# Changelog\n\n（暂无）"
+    return templates.TemplateResponse(request, "changelog.html",
+                                      {"user": user, "theme": _theme(user), "md": md})
+
+
 # ---------------- 总览大屏 ----------------
 @app.get("/")
 def overview(request: Request, days: int = 7, ticket: str | None = None):

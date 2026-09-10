@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Changelog · log-ui{% endblock %}
+{% block content %}
+<div class="card" style="max-width:860px;margin:0 auto">
+  <h2 style="margin-top:0">📝 更新日志 <span class="meta">v{{ version }}</span></h2>
+  <div id="md" style="line-height:1.7"></div>
+</div>
+<script src="/static/md.min.js"></script>
+<script>
+var raw = {{ md|tojson }};
+var el = document.getElementById('md');
+if (window.markdownit) {
+  var md = window.markdownit({html:false, link:true});
+  el.innerHTML = md.render(raw);
+} else {
+  // 无库兜底：简易渲染（标题/列表/粗体/代码）
+  var h = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  h = h.replace(/^### (.*)$/gm,'<h4>$1</h4>')
+       .replace(/^## (.*)$/gm,'<h3 style="color:var(--accent)">$1</h3>')
+       .replace(/^# (.*)$/gm,'<h2>$1</h2>')
+       .replace(/^\- (.*)$/gm,'<li>$1</li>')
+       .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+       .replace(/`(.+?)`/g,'<code>$1</code>');
+  el.innerHTML = h;
+}
+</script>
+{% endblock %}
