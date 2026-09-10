@@ -24,6 +24,19 @@ app.include_router(auth_router)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 
+
+def _app_version() -> str:
+    try:
+        for line in (BASE / "CHANGELOG.md").read_text(encoding="utf-8").splitlines():
+            if line.startswith("## ["):
+                return line.split("[")[1].split("]")[0]
+    except Exception:
+        pass
+    return "?"
+
+
+templates.env.globals["version"] = _app_version()
+
 LEVELS = ["ALL", "error", "warning", "info", "debug"]
 REFRESH_OPTIONS = [0, 5, 10, 30, 60]
 RANGE_OPTIONS = [1, 3, 7, 30]
@@ -61,6 +74,12 @@ def csrf_protect(request: Request):
 @app.get("/favicon.ico")
 def favicon():
     return Response(status_code=204)
+
+
+# 注入全局模板变量（版本号）
+@app.get("/version")
+def app_version():
+    return {"version": _app_version()}
 
 
 # ---------------- 总览大屏 ----------------
