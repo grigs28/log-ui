@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}编辑服务器 · log-ui{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px">
+  <h3 style="margin-top:0">编辑服务器 <span class="meta">{{ srv.name }}</span></h3>
+  <form method="post" action="/servers/edit">
+    <input type="hidden" name="orig_name" value="{{ srv.name }}">
+    <div style="margin-bottom:12px">
+      <label>名称（须与日志 hostname 字段一致）</label>
+      <input type="text" name="name" value="{{ srv.name }}" required style="width:300px">
+    </div>
+    <div style="margin-bottom:12px">
+      <label>IP</label>
+      <input type="text" name="ip" value="{{ srv.ip }}" style="width:300px">
+    </div>
+    <div style="margin-bottom:12px">
+      <label>类型</label>
+      <input type="text" name="stype" value="{{ srv.type }}" placeholder="server_linux / nas / firewall / vpn / zerotrust" style="width:300px">
+    </div>
+    <div style="margin-bottom:12px">
+      <label>备注</label>
+      <input type="text" name="note" value="{{ srv.note }}" style="width:300px">
+    </div>
+    <button>保存</button>
+    <a href="/servers" class="btn btn-muted">取消</a>
+  </form>
+</div>
+{% endblock %}

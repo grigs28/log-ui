@@ -31,3 +31,16 @@ def add_server(name: str, ip: str = "", stype: str = "", note: str = "") -> None
 
 def remove_server(name: str) -> None:
     save_registry([x for x in load_registry() if x.get("name") != name])
+
+
+def update_server(orig_name: str, name: str = "", ip: str = "", stype: str = "", note: str = "") -> None:
+    """Edit an existing registered server (matched by orig_name)."""
+    s = load_registry()
+    for x in s:
+        if x.get("name") == orig_name:
+            x["name"] = (name or "").strip() or orig_name
+            x["ip"] = (ip or "").strip()
+            x["type"] = (stype or "").strip()
+            x["note"] = (note or "").strip()
+            break
+    save_registry(s)

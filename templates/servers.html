@@ -18,6 +18,7 @@
       <td class="time">{{ r.last_seen or '-' }}</td>
       {% if is_admin %}<td>
         {% if r.registered %}
+        <a href="/servers/edit?name={{ r.name | urlencode }}" class="btn btn-muted" style="padding:2px 8px">编辑</a>
         <form method="post" action="/servers/delete" style="display:inline">
           <input type="hidden" name="name" value="{{ r.name }}">
           <button class="btn btn-muted" style="padding:2px 8px">移除</button>

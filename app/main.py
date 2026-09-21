@@ -169,6 +169,37 @@ async def servers_delete(request: Request, name: str = Form("")):
     return RedirectResponse("/servers", status_code=303)
 
 
+@app.get("/servers/edit")
+async def servers_edit_get(request: Request, name: str = ""):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/servers", status_code=303)
+    target = None
+    for s in srv.load_registry():
+        if s.get("name") == name:
+            target = s
+            break
+    return templates.TemplateResponse(
+        request, "edit_server.html",
+        {"user": user, "theme": _theme(user),
+         "srv": target or {"name": name, "ip": "", "type": "", "note": ""}},
+    )
+
+
+@app.post("/servers/edit")
+async def servers_edit_post(request: Request, orig_name: str = Form(""), name: str = Form(""),
+                            ip: str = Form(""), stype: str = Form(""), note: str = Form("")):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/servers", status_code=303)
+    srv.update_server(orig_name, name, ip, stype, note)
+    return RedirectResponse("/servers", status_code=303)
+
+
 # ---------------- 实时 tail (WebSocket) ----------------
 @app.get("/tail")
 async def tail_page(request: Request):
