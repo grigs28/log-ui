@@ -5,9 +5,16 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.5.8] - 2026-09-24
+
+### Changed
+- 总览页采集器徽章样式升级：pill 徽章（状态色文字 + 同色发光底/描边），
+  字号 11px→13px 加粗，比原先的灰色小字更醒目；悬停仍显示详情
 
 ## [0.5.7] - 2026-09-24
 

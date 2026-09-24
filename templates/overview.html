@@ -10,9 +10,9 @@
     </div>
   </form>
   <span style="flex:1"></span>
-  <div style="display:flex;gap:12px;font-size:11px;color:var(--text2)" title="采集器状态（悬停看详情）">
+  <div style="display:flex;gap:10px" title="采集器状态（悬停看详情）">
     {% for b in badges %}
-    <span title="{{ b.detail }}" style="display:inline-flex;align-items:center;gap:5px;cursor:default">
+    <span title="{{ b.detail }}" class="cbadge cbadge-{{ b.css }}">
       <span class="dot {{ b.css }}"></span>{{ b.label }}</span>
     {% endfor %}
   </div>
