@@ -80,10 +80,10 @@ def probe() -> list:
     badges = []
 
     # ---- vector ----
-    ok_v, out = _sh(["docker", "inspect", "vector", "--format",
-                     "{{.State.Running}} {{.State.RestartCount}}"])
-    running = ok_v and out.startswith("true")
-    restarts = out.split()[-1] if ok_v and out else "?"
+    # 注意：docker 29.x 的 --format 里 .State.RestartCount 不存在（模板报错），
+    # 只查 Status，判定以 {{.State.Status}} == "running" 为准
+    ok_v, out = _sh(["docker", "inspect", "vector", "--format", "{{.State.Status}}"])
+    running = ok_v and out.strip() == "running"
     flow = _flow_count()
     if not running:
         state, css = "down", "err"
@@ -95,7 +95,7 @@ def probe() -> list:
         state, css = "ok", "ok"
     badges.append({"key": "vector", "label": "vector", "state": state, "css": css,
                    "detail": f"容器{'Up' if running else '未运行'}，{FLOW_WINDOW_MIN}分钟入库 "
-                             f"{'?' if flow is None else flow} 条，重启 {restarts} 次"})
+                             f"{'?' if flow is None else flow} 条"})
 
     # ---- cobian ----
     ok_t, _ = _sh(["systemctl", "is-active", "cobian-log-collector.timer"])

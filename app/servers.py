@@ -11,16 +11,25 @@ BASE = Path(__file__).resolve().parent.parent
 REG_PATH = BASE / "config" / "servers.yaml"
 
 _IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+# 每主机最低采集级别：空/info = 全收，warning/error = 只收该级以上
+_VALID_LEVELS = ("", "info", "warning", "error")
+
+
+def _norm_level(v) -> str:
+    v = (v or "").strip().lower()
+    return v if v in _VALID_LEVELS else ""
 
 
 def _norm_ignored(raw) -> list:
-    """ignored 规范化为 [{name, ip, type}]；兼容老格式裸字符串。"""
+    """ignored 规范化为 [{name, ip, type, min_level}]；兼容老格式裸字符串。"""
     out = []
     for x in raw or []:
         if isinstance(x, str):
-            out.append({"name": x, "ip": "", "type": ""})
+            out.append({"name": x, "ip": "", "type": "", "min_level": ""})
         elif isinstance(x, dict) and x.get("name"):
-            out.append({"name": x["name"], "ip": x.get("ip", ""), "type": x.get("type", "")})
+            out.append({"name": x["name"], "ip": x.get("ip", ""),
+                        "type": x.get("type", ""),
+                        "min_level": _norm_level(x.get("min_level", ""))})
     return out
 
 
@@ -55,12 +64,13 @@ def load_ignore_full() -> list:
     return i
 
 
-def add_server(name: str, ip: str = "", stype: str = "", note: str = "") -> None:
+def add_server(name: str, ip: str = "", stype: str = "", note: str = "",
+               min_level: str = "") -> None:
     s, i = _load_all()
     name = (name or "").strip()
     if name and not any(x.get("name") == name for x in s):
         s.append({"name": name, "ip": (ip or "").strip(), "type": (stype or "").strip(),
-                  "note": (note or "").strip()})
+                  "note": (note or "").strip(), "min_level": _norm_level(min_level)})
         _save_all(s, i)
 
 
@@ -69,7 +79,8 @@ def remove_server(name: str) -> None:
     _save_all([x for x in s if x.get("name") != name], i)
 
 
-def update_server(orig_name: str, name: str, ip: str = "", stype: str = "", note: str = "") -> None:
+def update_server(orig_name: str, name: str, ip: str = "", stype: str = "", note: str = "",
+                  min_level: str = "") -> None:
     s, i = _load_all()
     orig = (orig_name or "").strip()
     new_name = (name or "").strip() or orig
@@ -79,18 +90,20 @@ def update_server(orig_name: str, name: str, ip: str = "", stype: str = "", note
             x["ip"] = (ip or "").strip()
             x["type"] = (stype or "").strip()
             x["note"] = (note or "").strip()
+            x["min_level"] = _norm_level(min_level)
             break
     _save_all(s, i)
 
 
-def add_ignore(name: str, ip: str = "", stype: str = "") -> None:
+def add_ignore(name: str, ip: str = "", stype: str = "", min_level: str = "") -> None:
     s, i = _load_all()
     name = (name or "").strip()
     if name and not any(x["name"] == name for x in i):
-        # 已注册主机被忽略时带走登记的 IP/类型；名称本身是 IP 时自动带上
+        # 已注册主机被忽略时带走登记的 IP/类型/级别；名称本身是 IP 时自动带上
         if not ip and _IP_RE.match(name):
             ip = name
-        i.append({"name": name, "ip": (ip or "").strip(), "type": (stype or "").strip()})
+        i.append({"name": name, "ip": (ip or "").strip(),
+                  "type": (stype or "").strip(), "min_level": _norm_level(min_level)})
         _save_all(s, i)
 
 

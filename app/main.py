@@ -204,6 +204,7 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
         hs = summary.get(n, {})
         rows.append({"name": n, "ip": s.get("ip", ""), "type": s.get("type", ""),
                      "note": s.get("note", ""), "registered": True, "ignored": False,
+                     "min_level": s.get("min_level", ""),
                      "count": hs.get("count", 0), "errors": hs.get("errors", 0),
                      "last_seen": hs.get("last_seen")})
     for h in all_hosts:
@@ -211,7 +212,7 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
             continue
         hs = summary.get(h, {})
         rows.append({"name": h, "ip": "", "type": "", "note": "", "registered": False,
-                     "ignored": False,
+                     "ignored": False, "min_level": "",
                      "count": hs.get("count", 0), "errors": hs.get("errors", 0),
                      "last_seen": hs.get("last_seen")})
     rows.sort(key=lambda r: r["count"], reverse=True)
@@ -223,7 +224,7 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
         if edit_entry:
             edit_is_registered = True
         elif edit not in ignored:
-            edit_entry = {"name": edit, "ip": "", "type": "", "note": ""}
+            edit_entry = {"name": edit, "ip": "", "type": "", "note": "", "min_level": ""}
 
     return templates.TemplateResponse(
         request, "servers.html",
@@ -235,15 +236,17 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
 
 @app.post("/servers/add")
 def servers_add(request: Request, name: str = Form(""), ip: str = Form(""),
-                stype: str = Form(""), note: str = Form(""),
+                stype: str = Form(""), note: str = Form(""), min_level: str = Form(""),
                 csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
-    srv.add_server(name, ip, stype, note)
-    return RedirectResponse("/servers", status_code=303)
+    srv.add_server(name, ip, stype, note, min_level)
+    ok, msg = vecsync.sync()
+    dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
+    return RedirectResponse(dest, status_code=303)
 
 
 @app.post("/servers/delete")
@@ -261,14 +264,17 @@ def servers_delete(request: Request, name: str = Form(""),
 @app.post("/servers/update")
 def servers_update(request: Request, orig_name: str = Form(""), name: str = Form(""),
                    ip: str = Form(""), stype: str = Form(""), note: str = Form(""),
+                   min_level: str = Form(""),
                    csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
-    srv.update_server(orig_name, name, ip, stype, note)
-    return RedirectResponse("/servers", status_code=303)
+    srv.update_server(orig_name, name, ip, stype, note, min_level)
+    ok, msg = vecsync.sync()
+    dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
+    return RedirectResponse(dest, status_code=303)
 
 
 @app.post("/servers/ignore")
@@ -281,8 +287,9 @@ def servers_ignore(request: Request, name: str = Form(""),
         return RedirectResponse("/servers", status_code=303)
     reg = {s.get("name"): s for s in srv.load_registry()}
     e = reg.get((name or "").strip(), {})
-    srv.add_ignore(name, ip=e.get("ip", ""), stype=e.get("type", ""))
-    ok, msg = vecsync.sync(srv.load_ignore())
+    srv.add_ignore(name, ip=e.get("ip", ""), stype=e.get("type", ""),
+                   min_level=e.get("min_level", ""))
+    ok, msg = vecsync.sync()
     dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
     return RedirectResponse(dest, status_code=303)
 
@@ -296,7 +303,7 @@ def servers_unignore(request: Request, name: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
     srv.remove_ignore(name)
-    ok, msg = vecsync.sync(srv.load_ignore())
+    ok, msg = vecsync.sync()
     dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
     return RedirectResponse(dest, status_code=303)
 

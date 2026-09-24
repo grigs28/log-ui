@@ -146,6 +146,8 @@ def read_new_lines(filepath, state):
                 if not line:
                     continue
                 record = parse_line(line)
+                if not level_ok(record.get("level", "info"), min_level):
+                    continue
                 batch.append(record)
                 if len(batch) >= BATCH_SIZE:
                     if send_batch(batch):
@@ -168,27 +170,42 @@ def read_new_lines(filepath, state):
     return committed_pos, mtime, True
 
 
-def load_ignored():
-    """读 log-ui 的忽略清单（servers.yaml 的 ignored）。忽略 = 拒收，本采集器直接跳过。
-    兼容老格式（裸字符串）与新格式（{name, ip, type} 对象）。读失败按空清单处理（fail-open）。"""
+def load_policy():
+    """读 log-ui 的主机策略（servers.yaml）。返回 (ignored_set, min_level)。
+    min_level: "" (info 全收) / "warning" / "error"。读失败 fail-open（全收）。"""
     try:
         import yaml
         with open("/opt/logging/log-ui/config/servers.yaml", encoding="utf-8") as f:
             d = yaml.safe_load(f) or {}
-        names = set()
+        ignored = set()
         for x in d.get("ignored") or []:
-            names.add(x if isinstance(x, str) else x.get("name"))
-        names.discard(None)
-        return names
+            ignored.add(x if isinstance(x, str) else x.get("name"))
+        ignored.discard(None)
+        min_level = ""
+        for s in d.get("servers") or []:
+            if s.get("name") == "192.168.0.28":
+                min_level = (s.get("min_level") or "").strip().lower()
+        return ignored, min_level
     except Exception:
-        return set()
+        return set(), ""
+
+
+_LEVEL_ORDER = {"info": 0, "warning": 1, "error": 2}
+
+
+def level_ok(level, min_level):
+    if not min_level:
+        return True
+    return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER.get(min_level, 0)
 
 
 def main():
-    ignored = load_ignored()
+    ignored, min_level = load_policy()
     if "192.168.0.28" in ignored:
         print("# hostname 192.168.0.28 is ignored by log-ui; skipping collection.")
         return
+    if min_level:
+        print(f"# min_level={min_level} (from log-ui policy)")
     state = load_state()
     files = sorted(glob.glob(os.path.join(LOG_DIR, "log *.txt")), reverse=True)
     for f in files:

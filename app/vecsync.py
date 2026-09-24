@@ -1,18 +1,23 @@
-"""把忽略清单同步进生产 Vector（vector.toml 受管块 + 热重载）。
+"""把「主机采集策略」同步进生产 Vector（vector.toml 受管块）。
+
+策略来源 config/servers.yaml：
+  ignored 名单               → 全拒
+  注册主机 min_level         → 只收该级别以上（level 已归一化为
+                               error/warning/info/debug；空 = info 全收）
 
 受管块由 BEGIN/END 标记包裹，log-ui 只改写标记之间的内容：
-    # ==== BEGIN log-ui managed: ignore-list ====
+    # ==== BEGIN log-ui managed: ignore-list (auto, do not edit) ====
     [transforms.ui_ignore_filter]
     type = "filter"
     inputs = ["journald_filter", "taf_prep"]
-    condition = '!contains([...], to_string(.hostname) ?? "-")'
+    condition = '<单行 VRL：按 hostname 查策略表>'
     # ==== END log-ui managed: ignore-list ====
 
 块不存在时自动安装（追加块 + 把 sinks.victorialogs.inputs 改为
 ["ui_ignore_filter"]；sink inputs 行与预期不符则拒绝写入，防手改冲突）。
 
-护栏：写前备份 → vector validate 校验 → SIGHUP 热重载 → 任一步失败
-自动回滚备份文件并再次 HUP，采集不中断。
+护栏：写前备份 → vector validate 校验 → docker restart → 健康检查，
+任一步失败自动回滚备份文件并再次重启，采集配置回到已知良好状态。
 """
 import json
 import re
@@ -40,17 +45,43 @@ _BLOCK_TMPL = (
     '[transforms.ui_ignore_filter]\n'
     'type = "filter"\n'
     'inputs = ["journald_filter", "taf_prep"]\n'
-    "condition = '{cond}'\n"
+    "condition = '''{cond}'''\n"
     "{end}"
 )
 
 
-def _condition(names: list) -> str:
-    # 数组成员检查必须用 includes()（contains 是字符串子串查找，传数组会 E110 运行时错误）
-    if not names:
+def _arr(items: list) -> str:
+    return "[" + ", ".join(json.dumps(x) for x in items) + "]"
+
+
+def _condition() -> str:
+    """从 servers.yaml 生成单行 VRL 策略条件。忽略 > 级别 > 默认放行。
+
+    includes() 是数组成员检查（contains 是字符串子串查找，传数组会 E110）。
+    """
+    from . import servers as srv
+    ignored = srv.load_ignore()
+    reg = srv.load_registry()
+    warn_hosts = [s["name"] for s in reg if s.get("min_level") == "warning"
+                  and s["name"] not in ignored]
+    err_hosts = [s["name"] for s in reg if s.get("min_level") == "error"
+                 and s["name"] not in ignored]
+
+    if not ignored and not warn_hosts and not err_hosts:
         return "true"
-    arr = ", ".join(json.dumps(n) for n in names)
-    return f'!includes([{arr}], to_string(.hostname) ?? "-")'
+    lvl = '(to_string(.level) ?? "info")'
+    # VRL 以换行分隔语句（不支持分号），if-else 链整体一条语句可跨行
+    branches = []
+    if ignored:
+        branches.append(f'if includes({_arr(ignored)}, h) {{ false }}')
+    if warn_hosts:
+        pre = "else " if branches else ""
+        branches.append(f'{pre}if includes({_arr(warn_hosts)}, h) {{ {lvl} == "warning" || {lvl} == "error" }}')
+    if err_hosts:
+        pre = "else " if branches else ""
+        branches.append(f'{pre}if includes({_arr(err_hosts)}, h) {{ {lvl} == "error" }}')
+    chain = "\n".join(branches) + "\nelse { true }"
+    return f'h = to_string(.hostname) ?? "-"\n{chain}'
 
 
 def _install_block(text: str, cond: str) -> str:
@@ -107,15 +138,15 @@ def _vector_healthy() -> tuple[bool, str]:
     return True, ""
 
 
-def sync(names: list) -> tuple[bool, str]:
-    """写受管块并重启 Vector 使其生效（含 validate / 健康 / 回滚护栏）。"""
+def sync() -> tuple[bool, str]:
+    """按 servers.yaml 当前策略写受管块并重启 Vector（含 validate/健康/回滚护栏）。"""
     if not VECTOR_TOML.exists():
-        return False, f"vector.toml 不存在（{VECTOR_TOML}），清单已存但未生效"
+        return False, f"vector.toml 不存在（{VECTOR_TOML}），策略已存但未生效"
 
     backup = VECTOR_TOML.with_suffix(".toml.bak-logui")
     try:
         text = VECTOR_TOML.read_text(encoding="utf-8")
-        cond = _condition(names)
+        cond = _condition()
         new = _rewrite_condition(text, cond) if BEGIN in text else _install_block(text, cond)
         if new == text:
             return True, "no-change"

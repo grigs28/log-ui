@@ -25,6 +25,12 @@
       <div><label>名称（须与 hostname 一致）</label><input type="text" name="name" value="{{ edit_entry.name }}" required></div>
       <div><label>IP</label><input type="text" name="ip" value="{{ edit_entry.ip }}"></div>
       <div><label>类型</label><input type="text" name="stype" value="{{ edit_entry.type }}"></div>
+      <div><label>采集级别</label>
+        <select name="min_level">
+          {% for v, t in [("", "info+（全部）"), ("warning", "warning+"), ("error", "error+")] %}
+          <option value="{{ v }}" {{ 'selected' if edit_entry.min_level == v else '' }}>{{ t }}</option>
+          {% endfor %}
+        </select></div>
       <div><label>备注</label><input type="text" name="note" value="{{ edit_entry.note }}"></div>
       <div><button>保存</button> <a href="/servers" class="btn btn-muted">取消</a></div>
     </form>
@@ -38,6 +44,12 @@
       <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
       <div><label>IP</label><input type="text" name="ip"></div>
       <div><label>类型</label><input type="text" name="stype" placeholder="server_linux/nas/firewall"></div>
+      <div><label>采集级别</label>
+        <select name="min_level">
+          {% for v, t in [("", "info+（全部）"), ("warning", "warning+"), ("error", "error+")] %}
+          <option value="{{ v }}">{{ t }}</option>
+          {% endfor %}
+        </select></div>
       <div><label>备注</label><input type="text" name="note"></div>
       <div><button>添加</button> <a href="/servers" class="btn btn-muted">取消</a></div>
     </form>
@@ -46,13 +58,14 @@
 
   <div class="logpane">
   <table>
-    <tr><th>#</th><th>名称</th><th>IP</th><th>类型</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
+    <tr><th>#</th><th>名称</th><th>IP</th><th>类型</th><th>级别</th><th>备注</th><th>状态</th><th>7天日志量</th><th>错误</th><th>最近日志</th>{% if is_admin %}<th>操作</th>{% endif %}</tr>
     {% for r in rows %}
     <tr>
       <td class="num" style="color:var(--muted)">{{ loop.index }}</td>
       <td><a href="/search?host={{ r.name }}">{{ r.name }}</a> {% if not r.registered %}<span class="tag">未注册</span>{% endif %}</td>
       <td class="num">{{ r.ip or '-' }}</td>
       <td>{{ r.type or '-' }}</td>
+      <td class="num">{{ (r.min_level or 'info') + '+' }}</td>
       <td class="meta">{{ r.note }}</td>
       <td>{% if r.ignored %}<span class="dot warn"></span> 已忽略{% else %}<span class="dot {{ 'ok' if r.count > 0 else 'warn' }}"></span> {{ '活跃' if r.count > 0 else '静默' }}{% endif %}</td>
       <td class="num">{{ "{:,}".format(r.count) }}</td>
@@ -78,12 +91,13 @@
   <details><summary><span style="color:var(--muted)">已忽略 {{ ignored_full|length }} 台（日志拒收中，点击展开）</span></summary>
   <div class="logpane" style="margin-top:8px">
   <table>
-    <tr><th>名称</th><th>IP</th><th>类型</th><th>操作</th></tr>
+    <tr><th>名称</th><th>IP</th><th>类型</th><th>级别</th><th>操作</th></tr>
     {% for e in ignored_full %}
     <tr>
       <td>{{ e.name }}</td>
       <td class="num">{{ e.ip or '-' }}</td>
       <td>{{ e.type or '-' }}</td>
+      <td class="num">{{ (e.min_level or 'info') + '+' }}</td>
       <td title="删除该忽略记录；主机若仍在发日志，将重新出现在纳管表（未注册）">
         <form method="post" action="/servers/unignore" style="display:inline">
           <input type="hidden" name="name" value="{{ e.name }}">

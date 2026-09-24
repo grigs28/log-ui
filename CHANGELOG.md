@@ -3,9 +3,24 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.5.6] - 2026-09-24
+
+### Added
+- **按主机配置采集级别**：新建/编辑服务器可设最低级别（info+ 全收 / warning+ / error+，
+  缺省 info+ 全收）。纳管表与忽略列表新增「级别」列；保存后自动生效（重启 Vector 数秒）
+  - Vector 受管块由"忽略名单"升级为"主机策略表"（忽略 > 级别 > 默认放行），
+    生成多行 VRL（VRL 不支持分号单行，此前写法无法编译）
+  - Cobian 采集器同步按 `192.168.0.28` 的级别设置过滤（绕过 Vector 的路径单独设闸）
+  - 忽略时级别设置随 IP/类型一并带入忽略列表，删除后原样恢复
+
+### Fixed
+- 采集器徽章误报 vector down：docker 29.x 的 `--format` 无 `.State.RestartCount`
+  字段（模板报错导致判定失败）；改用 `{{.State.Status}}` 判定
 
 ## [0.5.5] - 2026-09-24
 
