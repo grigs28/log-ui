@@ -191,10 +191,11 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
     rows = []
     for s in registry:
         n = s.get("name", "")
+        if n in ignored:
+            continue  # 已注册且被忽略：只显示在忽略列表（删除后回到纳管表）
         hs = summary.get(n, {})
         rows.append({"name": n, "ip": s.get("ip", ""), "type": s.get("type", ""),
-                     "note": s.get("note", ""), "registered": True,
-                     "ignored": n in ignored,
+                     "note": s.get("note", ""), "registered": True, "ignored": False,
                      "count": hs.get("count", 0), "errors": hs.get("errors", 0),
                      "last_seen": hs.get("last_seen")})
     for h in all_hosts:
