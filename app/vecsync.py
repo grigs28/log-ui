@@ -26,8 +26,14 @@ VECTOR_CTR = "vector"
 BEGIN = "# ==== BEGIN log-ui managed: ignore-list (auto, do not edit) ===="
 END = "# ==== END log-ui managed: ignore-list ===="
 
-# 首次安装块时，sink inputs 必须长这样才允许自动接线（否则提示人工处理）
-_EXPECTED_SINK_INPUTS = 'inputs = ["journald_filter", "taf_prep"]'
+# 首次安装块时，sink inputs 必须是以下已知形态之一（否则提示人工处理）。
+# 注意：生产的 "rclone_prep" 直连形态是历史手改——rclone_prep 同时也在
+# level_normalize 的 inputs 里，直连会导致 rclone 恢复发日志时双路重复入库；
+# 接线时统一理顺（rclone 只走归一化链）。
+_KNOWN_SINK_INPUTS = [
+    'inputs = ["journald_filter", "taf_prep"]',
+    'inputs = ["journald_filter", "taf_prep", "rclone_prep"]',
+]
 
 _BLOCK_TMPL = (
     "{begin}\n"
@@ -48,12 +54,14 @@ def _condition(names: list) -> str:
 
 def _install_block(text: str, cond: str) -> str:
     """无块时：改 sink inputs + 文件末尾追加块。结构不符抛异常。"""
-    if _EXPECTED_SINK_INPUTS not in text:
+    for expected in _KNOWN_SINK_INPUTS:
+        if expected in text:
+            text = text.replace(expected, 'inputs = ["ui_ignore_filter"]', 1)
+            break
+    else:
         raise RuntimeError(
-            "sinks.victorialogs.inputs 与预期不符（可能被手改）， refusing 自动接线；"
+            "sinks.victorialogs.inputs 与已知形态不符（可能被手改），refusing 自动接线；"
             "请人工确认后重试")
-    text = text.replace(_EXPECTED_SINK_INPUTS,
-                        'inputs = ["ui_ignore_filter"]', 1)
     block = _BLOCK_TMPL.format(begin=BEGIN, end=END, cond=cond)
     return text.rstrip("\n") + "\n\n\n" + block + "\n"
 
