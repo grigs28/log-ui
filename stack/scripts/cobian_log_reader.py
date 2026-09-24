@@ -168,7 +168,27 @@ def read_new_lines(filepath, state):
     return committed_pos, mtime, True
 
 
+def load_ignored():
+    """读 log-ui 的忽略清单（servers.yaml 的 ignored）。忽略 = 拒收，本采集器直接跳过。
+    兼容老格式（裸字符串）与新格式（{name, ip, type} 对象）。读失败按空清单处理（fail-open）。"""
+    try:
+        import yaml
+        with open("/opt/logging/log-ui/config/servers.yaml", encoding="utf-8") as f:
+            d = yaml.safe_load(f) or {}
+        names = set()
+        for x in d.get("ignored") or []:
+            names.add(x if isinstance(x, str) else x.get("name"))
+        names.discard(None)
+        return names
+    except Exception:
+        return set()
+
+
 def main():
+    ignored = load_ignored()
+    if "192.168.0.28" in ignored:
+        print("# hostname 192.168.0.28 is ignored by log-ui; skipping collection.")
+        return
     state = load_state()
     files = sorted(glob.glob(os.path.join(LOG_DIR, "log *.txt")), reverse=True)
     for f in files:

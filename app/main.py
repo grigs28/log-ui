@@ -3,6 +3,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.responses import RedirectResponse, Response
@@ -14,6 +15,7 @@ from .config import SECRET_KEY, get_sso_config, save_sso_config
 from .auth import router as auth_router, handle_ticket
 from . import vl
 from . import servers as srv
+from . import vecsync
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -176,7 +178,7 @@ def logs_fragment(request: Request, q: str = "*", host: str = "ALL",
 
 # ---------------- 服务器管理 ----------------
 @app.get("/servers")
-def servers_page(request: Request, edit: str | None = None):
+def servers_page(request: Request, edit: str | None = None, vecerr: str | None = None):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -216,7 +218,7 @@ def servers_page(request: Request, edit: str | None = None):
         request, "servers.html",
         {"user": user, "theme": _theme(user), "rows": rows, "is_admin": bool(user.get("is_admin")),
          "edit_entry": edit_entry, "edit_is_registered": edit_is_registered,
-         "ignored": sorted(ignored)},
+         "ignored_full": srv.load_ignore_full(), "vecerr": vecerr},
     )
 
 
@@ -267,7 +269,9 @@ def servers_ignore(request: Request, name: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
     srv.add_ignore(name)
-    return RedirectResponse("/servers", status_code=303)
+    ok, msg = vecsync.sync(srv.load_ignore())
+    dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
+    return RedirectResponse(dest, status_code=303)
 
 
 @app.post("/servers/unignore")
@@ -279,7 +283,9 @@ def servers_unignore(request: Request, name: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
     srv.remove_ignore(name)
-    return RedirectResponse("/servers", status_code=303)
+    ok, msg = vecsync.sync(srv.load_ignore())
+    dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
+    return RedirectResponse(dest, status_code=303)
 
 
 # ---------------- 实时 tail (WebSocket) ----------------
