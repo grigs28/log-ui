@@ -83,13 +83,14 @@ def update_server(orig_name: str, name: str, ip: str = "", stype: str = "", note
     _save_all(s, i)
 
 
-def add_ignore(name: str) -> None:
+def add_ignore(name: str, ip: str = "", stype: str = "") -> None:
     s, i = _load_all()
     name = (name or "").strip()
     if name and not any(x["name"] == name for x in i):
-        # 名称本身是 IP 时自动带上，其余留空（日志库里没有来源 IP）
-        ip = name if _IP_RE.match(name) else ""
-        i.append({"name": name, "ip": ip, "type": ""})
+        # 已注册主机被忽略时带走登记的 IP/类型；名称本身是 IP 时自动带上
+        if not ip and _IP_RE.match(name):
+            ip = name
+        i.append({"name": name, "ip": (ip or "").strip(), "type": (stype or "").strip()})
         _save_all(s, i)
 
 

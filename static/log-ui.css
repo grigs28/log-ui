@@ -2,7 +2,7 @@
 :root, .theme-dark {
   --bg: #080d14;          --surface: #111922;       --surface2: #18222f;
   --border: #1e293b;      --border-light: #253248;
-  --text: #e2e8f0;        --text2: #94a3b8;         --muted: #64748b;
+  --text: #edf2f9;        --text2: #a8b6c9;         --muted: #8291a6;
   --accent: #38bdf8;      --accent-h: #7dd3fc;       --brand: #818cf8;
   --success: #34d399;     --warning: #fbbf24;        --error: #f87171;        --info: #38bdf8;
   --grad1: #0f172a;       --grad2: #080d14;
@@ -10,7 +10,7 @@
 .theme-light {
   --bg: #f8fafc;          --surface: #ffffff;        --surface2: #f1f5f9;
   --border: #e2e8f0;      --border-light: #cbd5e1;
-  --text: #0f172a;        --text2: #475569;          --muted: #94a3b8;
+  --text: #0f172a;        --text2: #475569;          --muted: #64748b;
   --accent: #0284c7;      --accent-h: #0ea5e9;       --brand: #6366f1;
   --success: #059669;     --warning: #d97706;        --error: #dc2626;        --info: #0284c7;
   --grad1: #f8fafc;       --grad2: #e2e8f0;

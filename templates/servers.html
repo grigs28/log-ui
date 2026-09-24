@@ -54,7 +54,7 @@
       <td class="num">{{ r.ip or '-' }}</td>
       <td>{{ r.type or '-' }}</td>
       <td class="meta">{{ r.note }}</td>
-      <td><span class="dot {{ 'ok' if r.count > 0 else 'warn' }}"></span> {{ '活跃' if r.count > 0 else '静默' }}</td>
+      <td>{% if r.ignored %}<span class="dot warn"></span> 已忽略{% else %}<span class="dot {{ 'ok' if r.count > 0 else 'warn' }}"></span> {{ '活跃' if r.count > 0 else '静默' }}{% endif %}</td>
       <td class="num">{{ "{:,}".format(r.count) }}</td>
       <td class="num">{% if r.errors %}<span class="lv lv-error">{{ r.errors }}</span>{% else %}0{% endif %}</td>
       <td class="time">{{ r.last_seen or '-' }}</td>
@@ -65,6 +65,18 @@
           <input type="hidden" name="name" value="{{ r.name }}">
           <button class="btn btn-muted" style="padding:2px 8px">移除</button>
         </form>
+        {% if r.ignored %}
+        <form method="post" action="/servers/unignore" style="display:inline">
+          <input type="hidden" name="name" value="{{ r.name }}">
+          <button class="btn btn-muted" style="padding:2px 8px">取消忽略</button>
+        </form>
+        {% else %}
+        <form method="post" action="/servers/ignore" style="display:inline"
+              onsubmit="return confirm('将拒收 {{ r.name }} 的日志（已入库的历史保留）。\n确定忽略？')">
+          <input type="hidden" name="name" value="{{ r.name }}">
+          <button class="btn btn-muted" style="padding:2px 8px">忽略</button>
+        </form>
+        {% endif %}
         {% else %}
         <form method="post" action="/servers/ignore" style="display:inline"
               onsubmit="return confirm('将拒收 {{ r.name }} 的日志（已入库的历史保留）。\n确定忽略？')">
@@ -91,10 +103,10 @@
       <td>{{ e.name }}</td>
       <td class="num">{{ e.ip or '-' }}</td>
       <td>{{ e.type or '-' }}</td>
-      <td>
+      <td title="删除该忽略记录；主机若仍在发日志，将重新出现在纳管表（未注册）">
         <form method="post" action="/servers/unignore" style="display:inline">
           <input type="hidden" name="name" value="{{ e.name }}">
-          <button class="btn btn-muted" style="padding:2px 8px">恢复采集</button>
+          <button class="btn btn-muted" style="padding:2px 8px">删除</button>
         </form>
       </td>
     </tr>

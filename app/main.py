@@ -194,6 +194,7 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
         hs = summary.get(n, {})
         rows.append({"name": n, "ip": s.get("ip", ""), "type": s.get("type", ""),
                      "note": s.get("note", ""), "registered": True,
+                     "ignored": n in ignored,
                      "count": hs.get("count", 0), "errors": hs.get("errors", 0),
                      "last_seen": hs.get("last_seen")})
     for h in all_hosts:
@@ -201,6 +202,7 @@ def servers_page(request: Request, edit: str | None = None, vecerr: str | None =
             continue
         hs = summary.get(h, {})
         rows.append({"name": h, "ip": "", "type": "", "note": "", "registered": False,
+                     "ignored": False,
                      "count": hs.get("count", 0), "errors": hs.get("errors", 0),
                      "last_seen": hs.get("last_seen")})
     rows.sort(key=lambda r: r["count"], reverse=True)
@@ -268,7 +270,9 @@ def servers_ignore(request: Request, name: str = Form(""),
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/servers", status_code=303)
-    srv.add_ignore(name)
+    reg = {s.get("name"): s for s in srv.load_registry()}
+    e = reg.get((name or "").strip(), {})
+    srv.add_ignore(name, ip=e.get("ip", ""), stype=e.get("type", ""))
     ok, msg = vecsync.sync(srv.load_ignore())
     dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
     return RedirectResponse(dest, status_code=303)
