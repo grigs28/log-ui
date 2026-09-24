@@ -101,6 +101,14 @@ tr:hover td{ background:var(--surface2); }
 .dot.err{ background:var(--error); }
 .dot.unk{ background:var(--muted); }
 
+/* 图表卡片小标题徽章：有链接亮（可点跳转），无链接灰 */
+.hbadge{ font-size:13px; font-weight:600; line-height:1; display:inline-block; }
+.hbadge-dim{ color:var(--muted); background:rgba(148,163,184,.10);
+             padding:3px 10px; border-radius:6px; }
+a.hbadge-link{ color:var(--accent); background:rgba(56,189,248,.12);
+               padding:3px 10px; border-radius:6px; text-decoration:none; }
+a.hbadge-link:hover{ background:rgba(56,189,248,.24); }
+
 /* 采集器状态徽章（总览页） */
 .cbadge{ display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600;
          padding:4px 12px; border-radius:999px; letter-spacing:.3px; cursor:default; }
