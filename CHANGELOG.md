@@ -23,6 +23,14 @@
 - 首次接线时理顺 sink inputs：生产曾把 `rclone_prep` 直连 sink（与归一化链
   双路消费，rclone 恢复发日志时会重复入库）；现统一经归一化链，消除该潜伏问题
 
+### Fixed
+- **修复首次上线导致的 Vector 中断（约 2 分钟，已恢复）**：condition 误用
+  `contains()`（字符串子串查找，传数组运行时报 E110）；正确为数组成员检查
+  `includes()`。且 `vector validate` 未拦截该运行时错误、SIGHUP 热重载触发
+  Vector 0.54 的 fanout panic。加固：改用 `docker restart` 全新加载（中断数秒
+  但可靠），重启后健康检查（容器运行 + 无致命日志），任一环节失败自动回滚
+  备份并再次重启
+
 ## [0.5.1] - 2026-09-24
 
 ### Fixed

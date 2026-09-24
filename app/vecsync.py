@@ -46,10 +46,11 @@ _BLOCK_TMPL = (
 
 
 def _condition(names: list) -> str:
+    # 数组成员检查必须用 includes()（contains 是字符串子串查找，传数组会 E110 运行时错误）
     if not names:
         return "true"
     arr = ", ".join(json.dumps(n) for n in names)
-    return f'!contains([{arr}], to_string(.hostname) ?? "-")'
+    return f'!includes([{arr}], to_string(.hostname) ?? "-")'
 
 
 def _install_block(text: str, cond: str) -> str:
@@ -81,14 +82,33 @@ def _validate() -> tuple[bool, str]:
     return r.returncode == 0, out[-400:]
 
 
-def _reload() -> bool:
-    r = subprocess.run(["docker", "kill", "--signal", "HUP", VECTOR_CTR],
-                       capture_output=True, text=True, timeout=30)
+def _restart_vector() -> bool:
+    # 不用 SIGHUP 热重载：Vector 0.54 在拓扑变更时 reload 有 fanout panic bug
+    # （实测 topology_build_failed + 容器退出）。restart 中断仅数秒，可靠优先。
+    r = subprocess.run(["docker", "restart", VECTOR_CTR],
+                       capture_output=True, text=True, timeout=90)
     return r.returncode == 0
 
 
+def _vector_healthy() -> tuple[bool, str]:
+    """重启后确认：容器在跑 + 近 30s 无致命错误。"""
+    r = subprocess.run(["docker", "inspect", VECTOR_CTR, "--format", "{{.State.Running}}"],
+                       capture_output=True, text=True, timeout=30)
+    if r.returncode != 0 or r.stdout.strip() != "true":
+        return False, f"vector 容器未运行 ({r.stdout.strip()})"
+    import time as _t
+    _t.sleep(4)
+    l = subprocess.run(["docker", "logs", "--since", "30s", VECTOR_CTR],
+                       capture_output=True, text=True, timeout=30)
+    bad = [ln for ln in (l.stdout + l.stderr).splitlines()
+           if any(k in ln for k in ("topology_build_failed", "panicked", "ERROR"))]
+    if bad:
+        return False, "; ".join(bad[-2:])
+    return True, ""
+
+
 def sync(names: list) -> tuple[bool, str]:
-    """写受管块并热重载 Vector。返回 (ok, message)。"""
+    """写受管块并重启 Vector 使其生效（含 validate / 健康 / 回滚护栏）。"""
     if not VECTOR_TOML.exists():
         return False, f"vector.toml 不存在（{VECTOR_TOML}），清单已存但未生效"
 
@@ -106,16 +126,19 @@ def sync(names: list) -> tuple[bool, str]:
         ok, detail = _validate()
         if not ok:
             raise RuntimeError(f"vector validate 失败: {detail}")
-        if not _reload():
-            raise RuntimeError("SIGHUP 失败（容器名不对或 docker 不可用）")
+        if not _restart_vector():
+            raise RuntimeError("docker restart vector 失败")
+        h, hmsg = _vector_healthy()
+        if not h:
+            raise RuntimeError(f"重启后 Vector 不健康: {hmsg}")
         return True, "ok"
 
     except Exception as e:
-        # 回滚：还原备份并再 HUP，保证采集配置回到已知良好状态
+        # 回滚：还原备份并重启，保证采集配置回到已知良好状态
         try:
             if backup.exists():
                 shutil.copy2(backup, VECTOR_TOML)
-                _reload()
+                _restart_vector()
         except Exception:
             pass
         return False, f"同步失败已回滚: {e}"
