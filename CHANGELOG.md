@@ -1,6 +1,19 @@
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.5.1] - 2026-09-24
+
+### Fixed
+- **页脚版本号被冻结**：`version` 在模块 import 时只取一次值，更新 CHANGELOG 后页脚仍显示旧版本，
+  与实时的 `/version`、`/changelog` 三处互相矛盾。改为渲染时读取，升版本不必再重启进程
+- `scripts/version.sh` 进位规则：每段 0-9、逢 10 进位（0.0.9→0.1.0、0.9.9→1.0.0），
+  此前会产出 0.5.10 这类版本号
+
+### Added
+- `scripts/pre-commit` 钩子：改动 `app/`/`templates/`/`static/` 却未一并提交 `CHANGELOG.md` 时
+  拦截提醒（确无需记录时用 `git commit --no-verify` 跳过）
 
 ## [0.5.0] - 2026-08-05
 

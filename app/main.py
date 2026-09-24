@@ -35,7 +35,9 @@ def _app_version() -> str:
     return "?"
 
 
-templates.env.globals["version"] = _app_version()
+# 注入的是函数而不是取值：模板渲染时现读 CHANGELOG.md，
+# 否则版本号在 import 时被冻结，与实时的 /version、/changelog 不一致
+templates.env.globals["version"] = _app_version
 
 LEVELS = ["ALL", "error", "warning", "info", "debug"]
 REFRESH_OPTIONS = [0, 5, 10, 30, 60]

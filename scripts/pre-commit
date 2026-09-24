@@ -1,0 +1,31 @@
+#!/bin/bash
+# pre-commit：改动了 app/ templates/ static/ 时，要求同时更新 CHANGELOG.md
+#
+# 安装（在仓库根执行）：
+#     ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+# 跳过：
+#     git commit --no-verify
+#
+# 只提醒、不自动改版本号——自动 bump 会让提交历史难以预期。
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+code=$(printf '%s\n' "$staged" | grep -E '^(app/|templates/|static/)' || true)
+[ -z "$code" ] && exit 0
+
+if ! printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
+  echo "✋ 拦截：改动了代码，但 CHANGELOG.md 未一起提交"
+  echo
+  printf '%s\n' "$code" | sed 's/^/      /'
+  echo
+  echo "  先升版本、再记改动："
+  echo "      ./scripts/version.sh patch     # 或 minor / major"
+  echo "      编辑 CHANGELOG.md 填写本次改动"
+  echo "      git add CHANGELOG.md"
+  echo
+  echo "  （确认无需记录时：git commit --no-verify）"
+  exit 1
+fi
+
+exit 0
