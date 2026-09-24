@@ -16,6 +16,7 @@ from .auth import router as auth_router, handle_ticket
 from . import vl
 from . import servers as srv
 from . import vecsync
+from . import collectors
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -80,6 +81,12 @@ def favicon():
     return Response(status_code=204)
 
 
+@app.on_event("startup")
+async def _start_watchdog():
+    import asyncio
+    asyncio.create_task(collectors.watchdog())
+
+
 # 注入全局模板变量（版本号）
 @app.get("/version")
 def app_version():
@@ -129,7 +136,8 @@ def overview(request: Request, days: int = 7, ticket: str | None = None):
     }
     return templates.TemplateResponse(
         request, "overview.html",
-        {"user": user, "theme": _theme(user), "data": data, "range_options": RANGE_OPTIONS},
+        {"user": user, "theme": _theme(user), "data": data, "range_options": RANGE_OPTIONS,
+         "badges": collectors.status()},
     )
 
 

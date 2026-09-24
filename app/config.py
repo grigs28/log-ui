@@ -18,6 +18,13 @@ LISTEN_PORT = int(_cfg.get("listen_port", 80))
 SECRET_KEY = _cfg["secret_key"]
 
 
+def get_flag(key: str, default: bool = True) -> bool:
+    """布尔开关（如 selfheal），读不到取默认值。"""
+    c = _load()
+    v = c.get(key, default)
+    return bool(v) if not isinstance(v, str) else v.strip().lower() not in ("false", "0", "no")
+
+
 def get_sso_config() -> dict:
     """Live SSO config (re-read each call so UI edits take effect without restart)."""
     c = _load()

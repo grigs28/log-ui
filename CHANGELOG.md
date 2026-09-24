@@ -2,9 +2,24 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.5.5] - 2026-09-24
+
+### Added
+- **总览页采集器状态徽章**（小徽章，悬停看详情）：vector / cobian / victorialogs
+  - vector 双层判定：容器 Running + 最近 10 分钟入库量（进程 Up 但零流量 = 僵尸态，
+    正是 0.5.2 事故的形态，仅看进程发现不了）
+  - cobian：timer active + 上次运行结果 + SMB 挂载在位（挂载丢失只报红不自愈，
+    含凭据的挂载脚本留人工处理）
+- **自愈 watchdog**：后台每 60s 探测，挂了自动尝试恢复——vector 未运行→`docker start`、
+  僵尸态→`docker restart`、VL 挂→`docker start`、cobian timer 停→`systemctl start`、
+  上次采集失败→触发重跑。组件级 10 分钟节流；所有自愈动作写留痕日志到 VL
+  （`hostname=log-ui`，可搜索 `app_name:selfheal` 查看自愈历史）
+- settings.yaml 加 `selfheal: false` 可整体关闭自愈（缺省开启）
 
 ## [0.5.4] - 2026-09-24
 

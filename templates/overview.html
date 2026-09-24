@@ -1,14 +1,21 @@
 {% extends "base.html" %}
 {% block title %}总览 · log-ui{% endblock %}
 {% block content %}
-<div class="card" style="padding:10px 14px">
-  <form method="get" action="/" class="row">
+<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <form method="get" action="/" class="row" style="margin:0">
     <div><label>统计时间范围</label>
       <select name="days" onchange="this.form.submit()">
         {% for d in range_options %}<option value="{{d}}" {{ 'selected' if d==data.days else '' }}>{{d}} 天</option>{% endfor %}
       </select>
     </div>
   </form>
+  <span style="flex:1"></span>
+  <div style="display:flex;gap:12px;font-size:11px;color:var(--text2)" title="采集器状态（悬停看详情）">
+    {% for b in badges %}
+    <span title="{{ b.detail }}" style="display:inline-flex;align-items:center;gap:5px;cursor:default">
+      <span class="dot {{ b.css }}"></span>{{ b.label }}</span>
+    {% endfor %}
+  </div>
 </div>
 
 <div class="grid g4">
