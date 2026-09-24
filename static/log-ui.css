@@ -101,13 +101,11 @@ tr:hover td{ background:var(--surface2); }
 .dot.err{ background:var(--error); }
 .dot.unk{ background:var(--muted); }
 
-/* 采集器状态徽章（总览页）：连接正常亮、断开灰，不带圆点 */
+/* 采集器状态徽章（总览页）：连接=蓝系底，未连接=灰系底，不带圆点 */
 .cbadge{ display:inline-flex; align-items:center; font-size:15px; font-weight:600;
          padding:4px 14px; border-radius:999px; letter-spacing:.3px; cursor:default; }
-.cbadge-ok{ color:var(--success); background:rgba(52,211,153,.13); border:1px solid rgba(52,211,153,.4); }
-.cbadge-warn{ color:var(--warning); background:rgba(251,191,36,.13); border:1px solid rgba(251,191,36,.4); }
-.cbadge-err{ color:var(--error); background:rgba(248,113,113,.13); border:1px solid rgba(248,113,113,.4); }
-.cbadge-unk{ color:var(--text2); background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.32); }
+.cbadge-on{ color:var(--accent); background:rgba(56,189,248,.14); border:1px solid rgba(56,189,248,.45); }
+.cbadge-off{ color:var(--text2); background:rgba(148,163,184,.10); border:1px solid rgba(148,163,184,.32); }
 .tag{
   display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:500;
   border:1px solid var(--border); color:var(--text2);

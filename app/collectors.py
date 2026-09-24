@@ -85,14 +85,15 @@ def probe() -> list:
     ok_v, out = _sh(["docker", "inspect", "vector", "--format", "{{.State.Status}}"])
     running = ok_v and out.strip() == "running"
     flow = _flow_count()
+    # 徽章二态：连接（进程在跑，含降级）=蓝；未连接（容器停/状态未知）=灰
     if not running:
-        state, css = "down", "unk"   # 断开=灰（连接正常才亮）
+        state, css = "down", "off"
     elif flow is None:
-        state, css = "unknown", "unk"     # VL 不可达，无法判流量
+        state, css = "unknown", "off"     # VL 不可达，无法判流量
     elif flow == 0:
-        state, css = "warn", "err"        # 僵尸态：进程在但断流
+        state, css = "warn", "on"         # 僵尸态：进程在但断流（悬停见详情）
     else:
-        state, css = "ok", "ok"
+        state, css = "ok", "on"
     badges.append({"key": "vector", "label": "vector", "state": state, "css": css,
                    "detail": f"容器{'Up' if running else '未运行'}，{FLOW_WINDOW_MIN}分钟入库 "
                              f"{'?' if flow is None else flow} 条"})
@@ -103,13 +104,13 @@ def probe() -> list:
                      "--property=Result", "--value"])
     mounted = os.path.ismount("/mnt/cobian-logs")
     if not ok_t:
-        state, css = "down", "unk"   # 断开=灰
+        state, css = "down", "off"
     elif result.strip().lower() == "failed":
-        state, css = "warn", "warn"
+        state, css = "warn", "on"
     elif not mounted:
-        state, css = "warn", "warn"       # SMB 丢失只报警，不自愈（含凭据脚本留人工）
+        state, css = "warn", "on"         # SMB 丢失只报警，不自愈（含凭据脚本留人工）
     else:
-        state, css = "ok", "ok"
+        state, css = "ok", "on"
     badges.append({"key": "cobian", "label": "cobian", "state": state, "css": css,
                    "detail": f"timer {'active' if ok_t else '停止'}，上次运行 {result or '?'}，"
                              f"SMB 挂载{'在' if mounted else '丢失'}"})
@@ -118,7 +119,7 @@ def probe() -> list:
     alive = _vl_alive()
     badges.append({"key": "victorialogs", "label": "victorialogs",
                    "state": "ok" if alive else "down",
-                   "css": "ok" if alive else "unk",   # 断开=灰
+                   "css": "on" if alive else "off",
                    "detail": "/health " + ("200" if alive else "不可达")})
     return badges
 
