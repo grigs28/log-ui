@@ -7,9 +7,17 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.6.0] - 2026-09-24
+
+### Changed
+- 采集器徽章（vector/cobian/victorialogs）按需求重做：字号 13→15px（比图表标题略小）、
+  去掉徽章内圆点；**连接正常亮、断开灰**（down/unknown 一律灰色，ok 绿亮、warn 黄亮）
+- 回退 0.5.9 对图表标题与页头绿点的改动（恢复原样，未在需求内）
 
 ## [0.5.9] - 2026-09-24
 

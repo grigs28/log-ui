@@ -86,7 +86,7 @@ def probe() -> list:
     running = ok_v and out.strip() == "running"
     flow = _flow_count()
     if not running:
-        state, css = "down", "err"
+        state, css = "down", "unk"   # 断开=灰（连接正常才亮）
     elif flow is None:
         state, css = "unknown", "unk"     # VL 不可达，无法判流量
     elif flow == 0:
@@ -103,7 +103,7 @@ def probe() -> list:
                      "--property=Result", "--value"])
     mounted = os.path.ismount("/mnt/cobian-logs")
     if not ok_t:
-        state, css = "down", "err"
+        state, css = "down", "unk"   # 断开=灰
     elif result.strip().lower() == "failed":
         state, css = "warn", "warn"
     elif not mounted:
@@ -118,7 +118,7 @@ def probe() -> list:
     alive = _vl_alive()
     badges.append({"key": "victorialogs", "label": "victorialogs",
                    "state": "ok" if alive else "down",
-                   "css": "ok" if alive else "err",
+                   "css": "ok" if alive else "unk",   # 断开=灰
                    "detail": "/health " + ("200" if alive else "不可达")})
     return badges
 

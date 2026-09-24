@@ -101,18 +101,9 @@ tr:hover td{ background:var(--surface2); }
 .dot.err{ background:var(--error); }
 .dot.unk{ background:var(--muted); }
 
-/* 图表卡片小标题徽章：有链接亮（可点跳转），无链接灰 */
-.hbadge{ font-size:13px; font-weight:600; line-height:1; display:inline-block; }
-.hbadge-dim{ color:var(--muted); background:rgba(148,163,184,.10);
-             padding:3px 10px; border-radius:6px; }
-a.hbadge-link{ color:var(--accent); background:rgba(56,189,248,.12);
-               padding:3px 10px; border-radius:6px; text-decoration:none; }
-a.hbadge-link:hover{ background:rgba(56,189,248,.24); }
-
-/* 采集器状态徽章（总览页） */
-.cbadge{ display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600;
-         padding:4px 12px; border-radius:999px; letter-spacing:.3px; cursor:default; }
-.cbadge .dot{ width:8px; height:8px; }
+/* 采集器状态徽章（总览页）：连接正常亮、断开灰，不带圆点 */
+.cbadge{ display:inline-flex; align-items:center; font-size:15px; font-weight:600;
+         padding:4px 14px; border-radius:999px; letter-spacing:.3px; cursor:default; }
 .cbadge-ok{ color:var(--success); background:rgba(52,211,153,.13); border:1px solid rgba(52,211,153,.4); }
 .cbadge-warn{ color:var(--warning); background:rgba(251,191,36,.13); border:1px solid rgba(251,191,36,.4); }
 .cbadge-err{ color:var(--error); background:rgba(248,113,113,.13); border:1px solid rgba(248,113,113,.4); }
