@@ -87,26 +87,10 @@ source = """
 type = "remap"
 inputs = ["syslog_prep", "rclone_prep", "vlogs_prep"]
 source = """
-  # level 归一化：err/crit/critical/alert/emerg → error；warn → warning；debug/trace → debug；其余 → info
+  # level 归一化：err/crit/critical/alert/emerg → error；warn/warning → warning；debug/trace → debug；其余 → info
+  # 注意 Vector syslog 的 severity 输出 RFC5424 名 "warning"（v0.5.6 曾漏掉导致 warning 被降为 info）
   lvl = .level || "info"
-  .level = if lvl == "err" || lvl == "crit" || lvl == "critical" || lvl == "alert" || lvl == "emerg" {
-    "error"
-  } else if lvl == "warn" {
-    "warning"
-  } else if lvl == "debug" || lvl == "trace" {
-    "debug"
-  } else {
-    "info"
-  }
-  .level = if lvl == "err" || lvl == "crit" || lvl == "critical" || lvl == "alert" || lvl == "emerg" {
-    "error"
-  } else if lvl == "warn" {
-    "warning"
-  } else if lvl == "debug" || lvl == "trace" {
-    "debug"
-  } else {
-    "info"
-  }
+  .level = if lvl == "err" || lvl == "crit" || lvl == "critical" || lvl == "alert" || lvl == "emerg" { "error" } else if lvl == "warn" || lvl == "warning" { "warning" } else if lvl == "debug" || lvl == "trace" { "debug" } else { "info" }
 """
 
 [transforms.journald_filter]
