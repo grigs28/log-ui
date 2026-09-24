@@ -70,7 +70,8 @@ def _condition() -> str:
     if not ignored and not warn_hosts and not err_hosts:
         return "true"
     lvl = '(to_string(.level) ?? "info")'
-    # VRL 以换行分隔语句（不支持分号），if-else 链整体一条语句可跨行
+    # VRL 实测约束：if-else 链必须整体在同一行（`}` 换行后独立 `else` 会 E203），
+    # 赋值语句与 if 链之间用换行分隔
     branches = []
     if ignored:
         branches.append(f'if includes({_arr(ignored)}, h) {{ false }}')
@@ -80,7 +81,7 @@ def _condition() -> str:
     if err_hosts:
         pre = "else " if branches else ""
         branches.append(f'{pre}if includes({_arr(err_hosts)}, h) {{ {lvl} == "error" }}')
-    chain = "\n".join(branches) + "\nelse { true }"
+    chain = " ".join(branches) + " else { true }"
     return f'h = to_string(.hostname) ?? "-"\n{chain}'
 
 

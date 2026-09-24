@@ -4,9 +4,17 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.5.7] - 2026-09-24
+
+### Fixed
+- vecsync 策略条件生成：if-else 链压成单行——`}` 换行后独立成行的 `else`
+  在 Vector 0.54 实测触发 E203（0.5.6 部署时 sync 失败已自动回滚，功能未生效，
+  本版为修正后的正式落地）
 
 ## [0.5.6] - 2026-09-24
 
