@@ -11,7 +11,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from .config import SECRET_KEY, get_sso_config, save_sso_config
+from .config import (SECRET_KEY, get_sso_config, save_sso_config,
+                     get_retention, save_retention, RETENTION_CHOICES)
+from . import retention as retention_mod
 from .auth import router as auth_router, handle_ticket
 from . import vl
 from . import servers as srv
@@ -345,7 +347,7 @@ async def ws_tail(ws: WebSocket):
 
 # ---------------- 设置 ----------------
 @app.get("/settings")
-def settings_get(request: Request):
+def settings_get(request: Request, reterr: str | None = None):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -353,8 +355,27 @@ def settings_get(request: Request):
     return templates.TemplateResponse(
         request, "settings.html",
         {"user": user, "prefs": prefs, "refresh_options": REFRESH_OPTIONS,
-         "theme": prefs["theme"], "sso": get_sso_config()},
+         "theme": prefs["theme"], "sso": get_sso_config(),
+         "retention_days": get_retention(), "retention_choices": RETENTION_CHOICES,
+         "retention_live": retention_mod.current_retention_days(),
+         "reterr": reterr},
     )
+
+
+@app.post("/settings/retention")
+def settings_retention(request: Request, retention_days: int = Form(180),
+                       csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/settings", status_code=303)
+    if retention_days not in RETENTION_CHOICES:
+        return RedirectResponse("/settings", status_code=303)
+    save_retention(retention_days)
+    ok, msg = retention_mod.apply(retention_days)
+    dest = "/settings" if ok else f"/settings?reterr={quote(msg)}"
+    return RedirectResponse(dest, status_code=303)
 
 
 @app.post("/settings")

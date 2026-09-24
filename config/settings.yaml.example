@@ -13,3 +13,5 @@ listen_port: 80                              # 80 为特权端口，见 README �
 
 # session 签名密钥 —— 生成: openssl rand -hex 32
 secret_key: CHANGE_ME
+# 日志最长保存天数（VictoriaLogs retentionPeriod）。法规下限 180（网络安全法：不少于六个月）
+retention_days: 180

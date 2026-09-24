@@ -8,9 +8,21 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
+
+## [0.6.1] - 2026-09-24
+
+### Added
+- **设置页新增「日志最长保存时间」**（管理员）：180 / 365 / 730 天可选，
+  保存后自动改写 docker-compose 的 `-retentionPeriod` 并重建 VictoriaLogs
+  容器（数据 bind-mount 不丢，中断数秒）；compose config 校验 + 健康检查 +
+  失败自动回滚。下限锁定 180 天——依据《网络安全法》"留存相关的网络日志
+  不少于六个月"（2025 修正后为第二十三条第三项，2026-01-01 施行）
+- `app/retention.py` 保留期应用模块；设置页显示「当前生效」天数（直读
+  compose，与 settings.yaml 漂移时以实际为准）
 
 ## [0.6.0] - 2026-09-24
 

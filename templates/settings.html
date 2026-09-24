@@ -58,6 +58,24 @@
   <p class="meta">yz-login: {{ sso.yz_login_url }} · 应用 ID {{ sso.yz_app_id }}</p>
   {% endif %}
 
+  {% if user.is_admin %}
+  <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+  {% if reterr %}
+  <p style="color:var(--error)"><b>⚠ 保存失败（已回滚）：</b>{{ reterr }}</p>
+  {% endif %}
+  <p class="meta">日志最长保存时间（保存后重建 VictoriaLogs 容器，数据不丢，中断数秒。
+    依《网络安全法》日志留存不少于六个月，最短 180 天；缩短会清理超期旧数据）：</p>
+  <form method="post" action="/settings/retention" style="display:flex;gap:10px;align-items:center">
+    <select name="retention_days">
+      {% for d in retention_choices %}
+      <option value="{{ d }}" {{ 'selected' if d == retention_days else '' }}>{{ d }} 天</option>
+      {% endfor %}
+    </select>
+    <button>保存</button>
+    <span class="meta">当前生效：{{ retention_live or '?' }} 天</span>
+  </form>
+  {% endif %}
+
   <p class="meta" style="margin-top:12px"><a href="/auth/logout">登出 / 切换账号</a></p>
 </div>
 {% endblock %}

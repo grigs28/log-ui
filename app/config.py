@@ -25,6 +25,28 @@ def get_flag(key: str, default: bool = True) -> bool:
     return bool(v) if not isinstance(v, str) else v.strip().lower() not in ("false", "0", "no")
 
 
+RETENTION_CHOICES = (180, 365, 730)   # 网络安全法：日志留存不少于六个月(180天)，故下限 180
+
+
+def get_retention() -> int:
+    """日志最长保存天数（VictoriaLogs retentionPeriod）。"""
+    c = _load()
+    try:
+        v = int(c.get("retention_days", 180))
+    except (TypeError, ValueError):
+        return 180
+    return v if v >= 180 else 180
+
+
+def save_retention(days: int) -> None:
+    c = _load()
+    c["retention_days"] = int(days)
+    _CFG_PATH.write_text(
+        yaml.safe_dump(c, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
 def get_sso_config() -> dict:
     """Live SSO config (re-read each call so UI edits take effect without restart)."""
     c = _load()
