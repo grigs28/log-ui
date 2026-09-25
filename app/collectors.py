@@ -25,9 +25,13 @@ from .config import VL_URL, get_flag
 HEAL_COOLDOWN = 600      # 同一组件两次自愈的最小间隔（秒）
 CHECK_INTERVAL = 60      # watchdog 轮询周期
 FLOW_WINDOW_MIN = 10     # 流量判定窗口
+ZOMBIE_WINDOWS = 3       # 连续多少个零流量窗口才判 vector 僵尸（低峰期单窗口零流量属正常）
 
 _cache = {"ts": 0.0, "badges": None}     # status() 供页面用的 60s 缓存
 _last_heal: dict[str, float] = {}
+# 连续零流量窗口计数：n=已累计窗口数，ts=上次计数的时刻（保证每个窗口最多计一次，
+# 否则页面/巡检频繁调用 probe() 会把同一次零流量重复计数，误判僵尸）
+_zero_streak = {"n": 0, "ts": 0.0}
 
 
 def _sh(cmd: list, timeout: int = 4) -> tuple[bool, str]:
@@ -86,17 +90,32 @@ def probe() -> list:
     running = ok_v and out.strip() == "running"
     flow = _flow_count()
     # 徽章二态：连接（进程在跑，含降级）=蓝；未连接（容器停/状态未知）=灰
+    note = ""
     if not running:
         state, css = "down", "off"
+        _zero_streak["n"] = 0
     elif flow is None:
         state, css = "unknown", "off"     # VL 不可达，无法判流量
+        _zero_streak["n"] = 0
     elif flow == 0:
-        state, css = "warn", "on"         # 僵尸态：进程在但断流（悬停见详情）
+        # 单窗口零流量在低峰期属正常（v3-ctr01 拒包风暴停止后基线降到 ~150 条/小时）。
+        # 每个窗口最多计一次，累计满 ZOMBIE_WINDOWS 个才判僵尸并触发重启。
+        now = time.time()
+        if now - _zero_streak["ts"] >= FLOW_WINDOW_MIN * 60:
+            _zero_streak["n"] += 1
+            _zero_streak["ts"] = now
+        if _zero_streak["n"] >= ZOMBIE_WINDOWS:
+            state, css = "warn", "on"
+            note = f"（已连续 {_zero_streak['n']} 个窗口零入库）"
+        else:
+            state, css = "quiet", "on"
+            note = f"（零入库观察中 {_zero_streak['n']}/{ZOMBIE_WINDOWS}）"
     else:
+        _zero_streak["n"] = 0
         state, css = "ok", "on"
     badges.append({"key": "vector", "label": "vector", "state": state, "css": css,
                    "detail": f"容器{'Up' if running else '未运行'}，{FLOW_WINDOW_MIN}分钟入库 "
-                             f"{'?' if flow is None else flow} 条"})
+                             f"{'?' if flow is None else flow} 条{note}"})
 
     # ---- cobian ----
     ok_t, _ = _sh(["systemctl", "is-active", "cobian-log-collector.timer"])
@@ -141,7 +160,9 @@ def heal(badges: list) -> None:
         _try_heal("vector", ["docker", "start", "vector"], "docker start（容器未运行）")
     elif b["vector"]["state"] == "warn":
         _try_heal("vector", ["docker", "restart", "vector"],
-                  "docker restart（容器 Up 但 10 分钟零入库）")
+                  f"docker restart（连续 {ZOMBIE_WINDOWS} 个窗口约 "
+                  f"{ZOMBIE_WINDOWS * FLOW_WINDOW_MIN} 分钟零入库）")
+    # state == "quiet"（单窗口零流量，低峰常态）不触发任何动作
     if b["victorialogs"]["state"] == "down":
         _try_heal("victorialogs", ["docker", "start", "victorialogs"], "docker start（/health 不可达）")
     if b["cobian"]["state"] == "down":

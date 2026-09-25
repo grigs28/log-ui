@@ -10,10 +10,12 @@
 
 
 
+
 # Changelog
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.6.3] - 2026-09-26
 ## [0.6.2] - 2026-09-24
 
 ### Changed
