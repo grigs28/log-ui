@@ -30,7 +30,8 @@ if head -10 "$FILE" | grep -q '^## \[Unreleased\]'; then
   sed -i "0,/^## \[Unreleased\]/s//## [$NEW] - $TODAY/" "$FILE"
 else
   # 在第一个 ## 前插入新段
-  awk -v ver="## [$NEW] - $TODAY" 'BEGIN{print ""} /^## / && !done {print ver; done=1} {print}' "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+  # 不预置空行：BEGIN{print ""} 会导致每次升版本在文件顶部累积一个空行
+  awk -v ver="## [$NEW] - $TODAY" '/^## / && !done {print ver; done=1} {print}' "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
 fi
 
 echo "版本: $CUR -> $NEW ($TODAY)"
