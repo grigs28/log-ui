@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.6.6] - 2026-09-26
+
+### Fixed
+- Cobian 补读积压失败 `telling position disabled by next() call`：for 迭代中
+  `f.tell()` 被 TextIOWrapper 禁用（batch 满 500 行时触发）。正常期 5 分钟增量
+  不足 500 行从未暴露，挂载恢复补读 2 天积压时第一次炸。改用 `readline()` 循环
+  （tell 不受禁用限制）——这是与 v0.6.4 修复无关的**更老的潜在 bug**，被补读触发
+
+
 ## [0.6.5] - 2026-09-26
 
 ### Fixed

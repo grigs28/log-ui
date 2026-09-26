@@ -141,7 +141,14 @@ def read_new_lines(filepath, state, min_level=""):
     try:
         with open(filepath, encoding="utf-16", errors="replace") as f:
             f.seek(prev_pos)
-            for raw_line in f:
+            # 必须用 readline 而不是 for 迭代：TextIOWrapper 在 __next__ 之后
+            # 禁用 tell()（"telling position disabled by next() call"），
+            # batch 满 500 行时循环内的 f.tell() 会炸——正常期 5 分钟增量
+            # 不足 500 行从未触发，补读积压时第一次暴露（2026-09-26）
+            while True:
+                raw_line = f.readline()
+                if not raw_line:
+                    break
                 line = raw_line.strip()
                 if not line:
                     continue
