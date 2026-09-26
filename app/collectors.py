@@ -137,7 +137,9 @@ def probe() -> list:
     mounted = _mounted()
     if not ok_t:
         state, css = "down", "off"
-    elif result.strip().lower() == "failed":
+    elif result.strip().lower() not in ("", "success"):
+        # systemd 对非零退出记 Result=exit-code（不是 "failed"），
+        # 只判 "failed" 会漏掉所有以退出码失败的运行
         state, css = "warn", "on"
     elif not mounted:
         state, css = "warn", "on"         # SMB 丢失只报警，不自愈（含凭据脚本留人工）

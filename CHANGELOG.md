@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.6.5] - 2026-09-26
+
+### Fixed
+- 补齐两处监控盲区（排查 9-24 断流事故时发现）：
+  - 挂载丢失时 `glob` 读不到文件会伪装成"无新日志"→ 采集器**仍退出 0**；
+    现显式检查 `/proc/mounts`，未挂载即退出 1
+  - systemd 对非零退出记 `Result=exit-code`（不是 `failed`），徽章只判 "failed"
+    会漏掉全部以退出码失败的运行；现改为「非 success 即告警」
+
+
 ## [0.6.4] - 2026-09-26
 
 ### Fixed

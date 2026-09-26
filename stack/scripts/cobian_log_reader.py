@@ -170,6 +170,16 @@ def read_new_lines(filepath, state, min_level=""):
     return committed_pos, mtime, True
 
 
+def mounted(path=LOG_DIR):
+    """读 /proc/mounts 判断挂载（不用 os.path.ismount：僵死 CIFS 上 stat 会无限阻塞）。
+    挂载缺失时 glob 读不到文件会伪装成「无新日志」，必须显式失败，否则监控看不见。"""
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            return any((ln.split()[1] if len(ln.split()) > 1 else "") == path for ln in f)
+    except Exception:
+        return False
+
+
 def load_policy():
     """读 log-ui 的主机策略（servers.yaml）。返回 (ignored_set, min_level)。
     min_level: "" (info 全收) / "warning" / "error"。读失败 fail-open（全收）。"""
@@ -206,6 +216,10 @@ def main():
         return
     if min_level:
         print(f"# min_level={min_level} (from log-ui policy)")
+    if not mounted():
+        print(f"# {LOG_DIR} 未挂载，无法采集（挂载丢失/僵死）；"
+              f"恢复: systemctl restart mount-cobian.service", file=sys.stderr)
+        sys.exit(1)
     state = load_state()
     files = sorted(glob.glob(os.path.join(LOG_DIR, "log *.txt")), reverse=True)
     failed = False
