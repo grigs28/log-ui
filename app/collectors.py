@@ -61,6 +61,19 @@ def _flow_count() -> "int | None":
         return None
 
 
+def _mounted(path: str = "/mnt/cobian-logs") -> bool:
+    """读 /proc/mounts 判断，而不是 os.path.ismount()/stat——
+    僵死的 CIFS 挂载上 stat 会无限期阻塞，拖死 watchdog 与页面渲染
+    （2026-09-26 实际发生：挂载表有条目但目录访问挂起）。
+    挂载是否「可用」由采集器退出码反映（Result=failed）。"""
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            return any((ln.split()[1] if len(ln.split()) > 1 else "") == path
+                       for ln in f)
+    except Exception:
+        return False
+
+
 def _vl_alive() -> bool:
     try:
         return httpx.get(f"{VL_URL}/health", timeout=5).status_code == 200
@@ -121,7 +134,7 @@ def probe() -> list:
     ok_t, _ = _sh(["systemctl", "is-active", "cobian-log-collector.timer"])
     _, result = _sh(["systemctl", "show", "cobian-log-collector.service",
                      "--property=Result", "--value"])
-    mounted = os.path.ismount("/mnt/cobian-logs")
+    mounted = _mounted()
     if not ok_t:
         state, css = "down", "off"
     elif result.strip().lower() == "failed":

@@ -117,7 +117,7 @@ def send_batch(batch):
         return False
 
 
-def read_new_lines(filepath, state):
+def read_new_lines(filepath, state, min_level=""):
     """Read new lines and send to VL in batches.
 
     Returns (committed_pos, mtime, ok):
@@ -208,8 +208,9 @@ def main():
         print(f"# min_level={min_level} (from log-ui policy)")
     state = load_state()
     files = sorted(glob.glob(os.path.join(LOG_DIR, "log *.txt")), reverse=True)
+    failed = False
     for f in files:
-        committed_pos, mtime, ok = read_new_lines(f, state)
+        committed_pos, mtime, ok = read_new_lines(f, state, min_level)
         fname = os.path.basename(f)
         state["last_files"][fname] = committed_pos
         state["last_files"][fname + "_mtime"] = mtime
@@ -218,8 +219,14 @@ def main():
             # remaining files are retried on the next run without loss.
             print(f"# Stopped at {fname} (VL unavailable); will retry next run.",
                   file=sys.stderr)
+            failed = True
             break
     save_state(state)
+    # 失败必须以非零码退出：否则 systemd 记 Result=success，
+    # log-ui 的采集器徽章就看不到"采集器在报错"（2026-09-24 min_level
+    # NameError 因退出码为 0 而静默失败两天，教训）
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.6.4] - 2026-09-26
+
+### Fixed
+- **Cobian 采集器静默失败两天（2026-09-24 15:57 起断流）**：v0.5.6 加按主机级别过滤时，
+  `min_level` 是 `main()` 的局部变量，未传入 `read_new_lines()` → 每次运行抛
+  `name 'min_level' is not defined`，被宽泛 except 吞掉且**退出码仍为 0**，
+  于是 systemd 记 `Result=success`、监控徽章显示正常，实际一条都没采。
+  修复：正确传参；**失败时以非零码退出**（否则监控看不见"采集器在报错"）
+- 僵死 CIFS 挂载会拖死探测：采集器徽章的挂载检查原用 `os.path.ismount()`
+  （内部 stat，僵死挂载上无限阻塞），改为读 `/proc/mounts`；
+  挂载「可用性」交由采集器退出码反映
+- 数据可恢复：游标设计为"未成功发送不前进"，修复后会自动重读积压文件
+
 ## [0.6.3] - 2026-09-26
 
 ### Fixed
