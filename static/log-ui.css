@@ -180,8 +180,9 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .baymap{ display:grid; grid-template-columns:repeat(var(--per-row,4), var(--bay-w,106px));
          gap:6px; margin-top:8px; justify-content:start; overflow-x:auto; padding-bottom:2px; }
 
-.baymap.orient-v{ --bay-w:48px;  --bay-h:132px; }
-.baymap.orient-h{ --bay-w:176px; --bay-h:56px;  }
+/* 竖装多了一行介质标签，横装多了容量/介质/角色，尺寸相应放大 */
+.baymap.orient-v{ --bay-w:62px;  --bay-h:148px; }
+.baymap.orient-h{ --bay-w:236px; --bay-h:62px;  }
 
 .bay{ position:relative; width:var(--bay-w,106px); height:var(--bay-h,80px);
       border:1px solid var(--border-light); border-radius:6px;
@@ -193,21 +194,46 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .baymap.orient-v .bay{ padding:5px 2px; gap:2px; }
 .baymap.orient-v .bay-slot{ font-size:17px; }
 .baymap.orient-v .bay-dev{ font-size:11px; }
-.baymap.orient-v .bay-meta{ font-size:10px; line-height:1.25; display:flex;
-                            flex-direction:column; align-items:center; gap:0; }
-.baymap.orient-v .sbadge .sblabel{ display:none; }    /* 48px 宽放不下「健康」二字，只留圆点 */
+.baymap.orient-v .bay-size{ font-size:11px; flex-wrap:wrap; }
+.baymap.orient-v .bay-role{ font-size:10px; }
+.baymap.orient-v .bay-osd{ font-size:10px; }
+.baymap.orient-v .sbadge .sblabel{ display:none; }    /* 窄格放不下「健康」二字，只留圆点 */
 
 /* 横装：宽扁，内容横着排 */
 .baymap.orient-h .bay{ flex-direction:row; justify-content:flex-start; gap:6px;
                        padding:4px 9px; text-align:left; }
 .baymap.orient-h .bay-slot{ font-size:15px; min-width:16px; }
 .baymap.orient-h .bay-dev{ font-size:12px; min-width:26px; }
-.baymap.orient-h .bay-meta{ display:flex; align-items:baseline; gap:6px;
-                            font-size:11px; flex:1; }
-.baymap.orient-h .sbadge{ font-size:10px; }
+.baymap.orient-h .bay-size{ font-size:11px; min-width:62px; }
+.baymap.orient-h .bay-role{ font-size:10px; flex:1; min-width:0;
+                            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.baymap.orient-h .bay-osd{ font-size:10px; }
+.baymap.orient-h .sbadge{ font-size:10px; margin-left:auto; }
 
-.bay-size{ color:var(--text2); font-weight:600; }
+.bay-size{ color:var(--text2); font-weight:600; display:flex; align-items:center; gap:3px;
+           justify-content:center; line-height:1.2; }
+.bay-role{ line-height:1.2; min-height:0; }
+.bay-osd{ color:var(--muted); }
 .bay-empty{ color:var(--muted); font-style:italic; }
+
+/* 介质标签：SSD 蓝、HDD 灰。poll 从盘属性里带出来，档案里不存 */
+.media{ font-style:normal; font-size:9px; font-weight:700; letter-spacing:.3px;
+        padding:0 3px; border-radius:3px; line-height:1.5; }
+.media-ssd{ color:var(--accent); background:color-mix(in srgb, var(--accent) 18%, transparent); }
+.media-hdd{ color:var(--text2); background:color-mix(in srgb, var(--text2) 14%, transparent); }
+.media-nvme{ color:var(--brand); background:color-mix(in srgb, var(--brand) 18%, transparent); }
+
+/* 系统盘：紫系高亮 —— 这不是普通 OSD 盘，拔之前得先认出来 */
+.role-sys{ font-size:9px; font-weight:700; color:var(--brand); letter-spacing:.3px;
+           background:color-mix(in srgb, var(--brand) 16%, transparent);
+           padding:0 3px; border-radius:3px; }
+.role-class{ font-size:9px; color:var(--muted); }
+
+.baymap.orient-v .bay-size,
+.baymap.orient-v .bay-dev,
+.baymap.orient-v .bay-role,
+.baymap.orient-v .bay-osd{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.baymap.orient-h .bay-size{ justify-content:flex-start; }
 
 /* 未归档盘位：日志里发现、还没落进机箱槽位的盘。虚线 + 品牌色，
    一眼区分于「空槽」（空槽是灰虚线）。拖进任一空槽即落档。 */

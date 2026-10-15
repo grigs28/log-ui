@@ -47,10 +47,51 @@ _SIZE_RE = re.compile(r'(\d+(?:\.\d+)?)\s*([KMGT])(?:i?B)?\b', re.I)
 _SIZE_TB = {"K": 1e-9, "M": 1e-6, "G": 1e-3, "T": 1.0}
 
 
+_SIZE_ONLY = re.compile(r'^\d+(?:\.\d+)?\s*[KMGT](?:i?B)?$', re.I)
+_MEDIA = ("SSD", "HDD", "NVME", "SSD-SATA", "SAS", "SATA")
+_CARRIER_RE = re.compile(r'^(RAID\d*|ZFS|LVM|MD\d*|JBOD|MIRROR|STRIPE)\b', re.I)
+_PSLOT_RE = re.compile(r'e(\d+)/s(\d+)')
+# poll 里主机名后的括号有时不是 IP（本机轮询时是「本机」），别拿它当地址用
+_IPV4_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}$')
+
+
 def parse_size(text: str) -> str:
     """从一段文本里抠出容量，归一化成 1.8T / 894G 这种短写法。抠不到返回 ''。"""
     m = _SIZE_RE.search(text or "")
     return f"{m.group(1)}{m.group(2).upper()}" if m else ""
+
+
+def parse_attr(attr: str) -> dict:
+    """拆解盘行的属性括号。poll 新版是「·」分隔的结构化字段：
+
+        /dev/sdf[ 2.2T·HDD·RAID0(e252/s6)·osd.22 ]
+        /dev/sda[ 446.1G·SSD·RAID1(e252/s0+e252/s1)·系统盘 ]
+        /dev/sdc[ 3.6T·HDD·ZFS:tank ]
+        /dev/sdb[ 278.5G·HDD·RAID0(e252/s2)·osd.84·hdd-small ]
+        旧版：osd.74·hdd-small    更旧：空
+
+    返回 {size, media, carrier, pslots, role, dclass}，认不出的一律留空 ——
+    老日志、格式微调都不会解析出错，只是少显示点东西。
+    """
+    out = {"size": "", "media": "", "carrier": "", "pslots": [], "role": "", "dclass": ""}
+    for raw in (attr or "").split("·"):
+        p = raw.strip()
+        if not p:
+            continue
+        if not out["size"] and _SIZE_ONLY.match(p):
+            out["size"] = parse_size(p)
+        elif p.upper() in _MEDIA:
+            out["media"] = p.upper()
+        elif _CARRIER_RE.match(p):
+            out["carrier"] = p
+            out["pslots"] = ["%s/%s" % (e, s) for e, s in _PSLOT_RE.findall(p)]
+        elif p.startswith("osd."):
+            continue                        # OSD 号另有字段，不重复收
+        elif "盘" in p:
+            out["role"] = p                 # 系统盘 / 数据盘 …
+        else:
+            out["dclass"] = p               # Ceph 设备类，如 hdd-small
+    return out
 
 
 def size_tb(s: str):
@@ -158,7 +199,7 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
              "mode": _clamp_mode(d["settings"].get("default_mode")),
              "orient": _clamp_orient(d["settings"].get("default_orient")),
              "per_row": _clamp_per_row(per_row or d["settings"]["default_per_row"]),
-             "disks": []}
+             "disks": _blank_layout(d)}      # 与面板默认一致，不给 0 槽的空白档案
         d["servers"].append(s)
     else:
         if ip:
@@ -466,10 +507,14 @@ def poll_logs() -> dict:
         m = _POLL_RE.match(msg)
         if m:
             host = m.group("host")
-            h = by_host.setdefault(host, {"ip": m.group("ip"), "disks": {},
-                                          "poll_errors": []})
-            if m.group("ip"):
-                h["ip"] = m.group("ip")
+            h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
+            addr = (m.group("ip") or "").strip()
+            # 主机括号里可能是真 IP，也可能是「本机」（本机自轮询）——
+            # 只认 IP 形态，免得把「本机」当地址覆盖掉真实 IP
+            if _IPV4_RE.match(addr):
+                h["ip"] = addr
+            elif addr and not h.get("ip"):
+                h["addr_note"] = addr
             dev = m.group("dev")
             body = _ANSI_RE.sub("", m.group("msg")).strip()
             if dev == "/dev/?":
@@ -479,10 +524,16 @@ def poll_logs() -> dict:
             ent = h["disks"].setdefault(dev, {})
             ent["osd"] = m.group("osd") if m.group("osd") != "?" else ""
             ent["attr"] = (m.group("attr") or "").strip()
-            # 容量：poll 脚本目前不上报，故从属性括号和正文里尽力抠（抠不到就留空）
-            sz = parse_size(ent["attr"]) or parse_size(body)
-            if sz:
-                ent["size"] = sz
+            info = parse_attr(ent["attr"])
+            for k in ("size", "media", "carrier", "role", "dclass"):
+                if info[k]:
+                    ent[k] = info[k]
+            if info["pslots"]:
+                ent["pslots"] = info["pslots"]
+            if not ent.get("size"):            # 括号里没有就从正文里抠一次
+                sz = parse_size(body)
+                if sz:
+                    ent["size"] = sz
             if m.group("tag") == "异常":
                 if _is_real_issue(body):
                     ent["issue"] = body
@@ -558,6 +609,14 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
     return "warn" if has_dev else "none"
 
 
+def _log_fields(ent) -> dict:
+    """日志侧带出来的硬件信息（档案里不存，每次从日志现取）。"""
+    e = ent or {}
+    return {"media": e.get("media", ""), "role": e.get("role", ""),
+            "carrier": e.get("carrier", ""), "pslots": e.get("pslots", []),
+            "dclass": e.get("dclass", "")}
+
+
 def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEFAULT_SLOTS) -> dict:
     """把一台服务器的布局与日志合并成渲染行。"""
     mode = _clamp_mode(s.get("mode"))
@@ -588,6 +647,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                        else (ent or {}).get("status", "")),
             "known": bool(ent),
             "state": st, "label": _STATE_LABEL[st],
+            **_log_fields(ent),
         })
     # 日志里有、布局里没录的盘：自动补进图（提示未建档）
     for dev, ent in sorted(log_disks.items()):
@@ -599,7 +659,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                       "note": "", "issue": ent.get("issue", ""),
                       "status": ("异常" if ent.get("issue") else ent.get("status", "")),
                       "known": True, "unfiled": True,
-                      "state": st, "label": _STATE_LABEL[st]})
+                      "state": st, "label": _STATE_LABEL[st], **_log_fields(ent)})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))
     # 面板分行：每排 per_row 个
     framed = [x for x in disks if x["slot"] is not None]
@@ -626,7 +686,14 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     sizes = [size_tb(x["size"]) for x in disks if x["dev"]]
     known = [v for v in sizes if v is not None]
     total = _fmt_tb(sum(known)) if known else ""
+    # 硬件构成：介质 / 系统盘 / 设备类。只统计装了盘的格子。
+    filled = [x for x in disks if x["dev"]]
+    media = {"SSD": sum(1 for x in filled if x["media"] == "SSD"),
+             "HDD": sum(1 for x in filled if x["media"] == "HDD")}
+    sysn = sum(1 for x in filled if x["role"] == "系统盘")
+    classes = sorted({x["dclass"] for x in filled if x["dclass"]})
     return {"name": s["name"], "ip": (s.get("ip") or (log_h or {}).get("ip", "")),
+            "addr_note": (log_h or {}).get("addr_note", ""),
             "mode": mode, "orient": orient, "cols": per_row, "h_per_row": h_per_row,
             "row_count": len(rows), "rows": rows, "disks": disks,
             "slots": len(framed), "layout_rows": layout_rows, "h_rows": h_rows,
@@ -639,6 +706,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "installed": sum(1 for x in disks if x["dev"] and x["slot"] is not None),
             "installed_any": sum(1 for x in disks if x["dev"]),
             "size_known": len(known), "total_size": total,
+            "media": media, "sys_count": sysn, "classes": classes,
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
             "unfiled": sum(1 for x in disks if x.get("unfiled")),
