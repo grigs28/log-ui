@@ -2,6 +2,21 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.4.6] - 2026-10-15
+
+### Changed
+- 「磁盘」tab：**远端命令改为一律经 `w.sh` 下发**：
+
+  ```bash
+  /opt/grigs/w.sh ssh.run.sh 192.168.93.91 -- "/opt/grigs/w.sh osd.check.sh /dev/sdb"
+  ```
+
+  原来是直接调节点上的 `/opt/grigs/osd/osd.check.sh`。但 `w.sh` 每次会先从 NAS
+  拉最新脚本再执行 —— 节点上那份可能是旧的（实测 `osd.check.sh` 节点 49736 字节、
+  NAS 49998 字节）。经 `w.sh` 就不存在版本漂移，也和 `osd.poll.sh` 的调用方式一致
+
+  关灯命令的匹配模式同步扩展到三种命令行（经 w.sh 的 / 直接的 / -f 与不带 -f）
+
 ## [1.4.5] - 2026-10-15
 
 ### Changed

@@ -29,8 +29,8 @@ from .disks import _ANSI_RE
 
 GRIGS = "/opt/grigs"
 W_SH = f"{GRIGS}/w.sh"
-CHECK_SH = f"{GRIGS}/osd/osd.check.sh"
-LED_SH = f"{GRIGS}/osd/osd.led.sh"
+# 远端一律经 w.sh 下发（w.sh 会先从 NAS 拉最新脚本再执行）：
+#   /opt/grigs/w.sh ssh.run.sh <ip> -- "/opt/grigs/w.sh osd.check.sh <设备>"
 
 LED_SECONDS = 120          # 灯亮多久（网页触发，走 stdin 换行停）
 CHECK_TIMEOUT = 900        # 完整检测最长等（含测速，坏盘可能挂 90s+）
@@ -110,7 +110,9 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         raise Rejected(f"设备名不合法: {dev!r}")
 
     if action == "check":
-        return f"{CHECK_SH} {dev}"
+        # 经 w.sh 下发：它会先从这个 NAS 拉最新脚本再执行，避免用到节点上过期的旧版
+        # （实测节点上的 osd.check.sh 比 NAS 上小 262 字节）
+        return f"{W_SH} osd.check.sh {dev}"
 
     if action == "led-off":
         # osd.led.sh 有 trap cleanup EXIT INT TERM HUP，SIGTERM 就能触发它自己的
@@ -119,7 +121,9 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         slots = [s for s in _slots_of(host, dev) if _SLOT_RE.match(s)]
         targets = " ".join(slots) if slots else dev
         esc = re.escape(targets)
-        return (f"pkill -TERM -f 'osd\\.led\\.sh -f {esc}' || true; "
+        # 三种命令行都要匹配：经 w.sh 下发的、直接调的 osd.led.sh、以及 -f/不带 -f 两种
+        return (f"pkill -TERM -f 'w\\.sh osd\\.led\\.sh -f {esc}' || true; "
+                f"pkill -TERM -f 'osd\\.led\\.sh -f {esc}' || true; "
                 f"pkill -TERM -f 'osd\\.led\\.sh {esc}' || true; echo 已发送关灯")
 
     if action in ("led-fail", "led-locate"):
@@ -131,7 +135,7 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         # 脚本的 wait_for_input 收到即「用户主动停止」，时长精确。
         # 外面套 nohup + & ：ssh 立即返回，灯自己在节点上闪 ——
         # 这样一次可以点好几块盘同时闪，不用等前一块亮完。
-        inner = f"{{ sleep {n}; echo; sleep 3600; }} | {LED_SH} {flag}{targets}"
+        inner = f"{{ sleep {n}; echo; sleep 3600; }} | {W_SH} osd.led.sh {flag}{targets}"
         return f"nohup bash -c '{inner}' >/tmp/osd.led.out 2>&1 & echo 已下发 pid=$!"
 
     raise Rejected(f"未知动作: {action!r}")
