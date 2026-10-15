@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}总览 · log-ui{% endblock %}
 {% block content %}
-<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
   <form method="get" action="/" class="row" style="margin:0">
     <div><label>统计时间范围</label>
       <select name="days" onchange="this.form.submit()">
@@ -25,12 +25,12 @@
 </div>
 
 <div class="grid g2">
-  <div class="card"><h3 style="margin:0 0 8px">日志量趋势 (每小时)</h3><div id="trend" class="chart"></div></div>
-  <div class="card"><h3 style="margin:0 0 8px">等级分布</h3><div id="level" class="chart"></div></div>
+  <div class="card"><h3>日志量趋势 (每小时)</h3><div id="trend" class="chart"></div></div>
+  <div class="card"><h3>等级分布</h3><div id="level" class="chart"></div></div>
 </div>
 <div class="grid g2">
-  <div class="card"><h3 style="margin:0 0 8px">各服务器日志量</h3><div id="host" class="chart"></div></div>
-  <div class="card"><h3 style="margin:0 0 8px">各服务器错误数</h3><div id="errhost" class="chart"></div></div>
+  <div class="card"><h3>各服务器日志量</h3><div id="host" class="chart"></div></div>
+  <div class="card"><h3>各服务器错误数</h3><div id="errhost" class="chart"></div></div>
 </div>
 
 <script src="/static/echarts.min.js"></script>

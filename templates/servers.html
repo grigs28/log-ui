@@ -9,7 +9,7 @@
 {% endif %}
 <div class="card">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-    <h3 style="margin:0">服务器纳管</h3>
+    <h3 class="plain">服务器纳管</h3>
     <span class="meta">（注册 + 自动发现，名称 = 日志 hostname，点击名称可查该服务器日志）</span>
     {% if is_admin and not edit_entry %}
     <span style="flex:1"></span>
@@ -19,7 +19,7 @@
 
   {% if is_admin and edit_entry %}
   <div class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent)">
-    <h3 style="margin-top:0">{% if edit_is_registered %}编辑服务器：{{ edit_entry.name }}{% else %}登记服务器：{{ edit_entry.name }}{% endif %}</h3>
+    <h3>{% if edit_is_registered %}编辑服务器：{{ edit_entry.name }}{% else %}登记服务器：{{ edit_entry.name }}{% endif %}</h3>
     <form method="post" action="{% if edit_is_registered %}/servers/update{% else %}/servers/add{% endif %}" class="row">
       {% if edit_is_registered %}<input type="hidden" name="orig_name" value="{{ edit_entry.name }}">{% endif %}
       <div><label>名称（须与 hostname 一致）</label><input type="text" name="name" value="{{ edit_entry.name }}" required></div>
@@ -39,7 +39,7 @@
 
   {% if is_admin and not edit_entry %}
   <div id="addrow" class="card" style="max-width:760px;margin-bottom:14px;border-color:var(--accent);display:none">
-    <h3 style="margin-top:0">添加 / 注册服务器</h3>
+    <h3>添加 / 注册服务器</h3>
     <form method="post" action="/servers/add" class="row">
       <div><label>名称（须与日志 hostname 一致）</label><input type="text" name="name" required></div>
       <div><label>IP</label><input type="text" name="ip"></div>

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}磁盘 · log-ui{% endblock %}
 {% block content %}
-<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-  <h3 style="margin:0">磁盘盘位图</h3>
+<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <h3 class="plain">磁盘盘位图</h3>
   <span class="meta">按服务器名排列 · 面板默认为槽号 · 归属与状态由日志自动带出，其余可手工录入</span>
   <span style="flex:1"></span>
   <span class="meta">{{ stats.servers }} 台 · {{ stats.disks }} 盘

@@ -2,149 +2,161 @@
 {% block title %}设置 · log-ui{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width:600px">
-  <h3 style="margin-top:0">个人偏好</h3>
-  <p class="meta">按用户保存（{{ user.display_name or user.username }}），影响总览页默认行为。</p>
-  <form method="post" action="/settings">
-    <div style="margin-bottom:12px">
-      <label>默认自动刷新间隔</label>
-      <select name="refresh_sec">
-        {% for s in refresh_options %}<option value="{{s}}" {{ 'selected' if s==prefs.refresh_sec else '' }}>{{ '关' if s==0 else s~' 秒' }}</option>{% endfor %}
-      </select>
-    </div>
-    <div style="margin-bottom:12px">
-      <label>默认显示条数</label>
-      <input type="number" name="limit" value="{{ prefs.limit }}" min="1" max="1000" style="width:120px">
-    </div>
-    <div style="margin-bottom:12px">
-      <label>主题</label>
-      <select name="theme">
-        <option value="dark" {{ 'selected' if prefs.theme=='dark' else '' }}>深色 (dark)</option>
-        <option value="light" {{ 'selected' if prefs.theme=='light' else '' }}>浅色 (light)</option>
-      </select>
-    </div>
-    <button>保存偏好</button>
-    <a href="/" class="btn" style="background:var(--muted)">返回总览</a>
-  </form>
-</div>
+{# 面板架：每组设置是**一个模块**，同一行上沿对齐、互不撑高。
+   窄的并排，宽的（保留期、钉钉）自己占一行。 #}
+<div class="settings-rack">
 
-<div class="card" style="max-width:600px">
-  <h3 style="margin-top:0">SSO / 单点登录 (yz-login)</h3>
-  <table style="margin-bottom:10px">
-    <tr><td class="meta">当前账户</td><td>{{ user.display_name or user.username }}</td></tr>
-    <tr><td class="meta">用户 ID</td><td>{{ user.id }}</td></tr>
-    <tr><td class="meta">角色</td><td>{{ '管理员' if user.is_admin else '普通用户' }}</td></tr>
-    <tr><td class="meta">yz 用户名</td><td>{{ user.username }}</td></tr>
-  </table>
+  <div class="card">
+    <h3>个人偏好</h3>
+    <p class="meta">按用户保存（{{ user.display_name or user.username }}），影响总览页默认行为。</p>
+    <form method="post" action="/settings">
+      <div class="field">
+        <label>默认自动刷新间隔</label>
+        <select name="refresh_sec">
+          {% for s in refresh_options %}<option value="{{s}}" {{ 'selected' if s==prefs.refresh_sec else '' }}>{{ '关' if s==0 else s~' 秒' }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>默认显示条数</label>
+        <input type="number" name="limit" value="{{ prefs.limit }}" min="1" max="1000" style="width:120px">
+      </div>
+      <div class="field">
+        <label>主题</label>
+        <select name="theme">
+          <option value="dark" {{ 'selected' if prefs.theme=='dark' else '' }}>深色 (dark)</option>
+          <option value="light" {{ 'selected' if prefs.theme=='light' else '' }}>浅色 (light)</option>
+        </select>
+      </div>
+      <div class="btnrow"><button>保存偏好</button></div>
+    </form>
+  </div>
 
-  {% if user.is_admin %}
-  <p class="meta">管理员可修改 yz-login 对接参数（保存后即时生效，免重启）：</p>
-  <form method="post" action="/settings/sso">
-    <div style="margin-bottom:10px">
-      <label>yz-login 平台地址</label>
-      <input type="text" name="yz_login_url" value="{{ sso.yz_login_url }}" style="width:320px">
+  <div class="card">
+    <h3>当前账户</h3>
+    <table class="kv">
+      <tr><td class="meta">账户</td><td>{{ user.display_name or user.username }}</td></tr>
+      <tr><td class="meta">用户 ID</td><td class="mono">{{ user.id }}</td></tr>
+      <tr><td class="meta">角色</td><td>{{ '管理员' if user.is_admin else '普通用户' }}</td></tr>
+      <tr><td class="meta">yz 用户名</td><td class="mono">{{ user.username }}</td></tr>
+    </table>
+    <div class="btnrow">
+      <a href="/auth/logout" class="btn btn-muted">登出 / 切换账号</a>
+      <a href="/" class="btn btn-muted">返回总览</a>
     </div>
-    <div style="margin-bottom:10px">
-      <label>应用 ID</label>
-      <input type="text" name="yz_app_id" value="{{ sso.yz_app_id }}" style="width:120px">
-    </div>
-    <div style="margin-bottom:10px">
-      <label>回调地址（只读，须与 yz-login 后台注册一致）</label>
-      <input type="text" value="{{ sso.callback_url }}" style="width:320px" disabled>
-    </div>
-    <button>保存 SSO 配置</button>
-  </form>
-  {% else %}
-  <p class="meta">yz-login: {{ sso.yz_login_url }} · 应用 ID {{ sso.yz_app_id }}</p>
-  {% endif %}
+  </div>
 
-  {% if user.is_admin %}
-  <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
-  {% if reterr %}
-  <p style="color:var(--error)"><b>⚠ 保存失败（已回滚）：</b>{{ reterr }}</p>
-  {% endif %}
-  <p class="meta">日志最长保存时间（保存后重建 VictoriaLogs 容器，数据不丢，中断数秒。
-    依《网络安全法》日志留存不少于六个月，最短 180 天；缩短会清理超期旧数据）：</p>
-  <form method="post" action="/settings/retention" style="display:flex;gap:10px;align-items:center">
-    <select name="retention_days">
-      {% for d in retention_choices %}
-      <option value="{{ d }}" {{ 'selected' if d == retention_days else '' }}>{{ d }} 天</option>
-      {% endfor %}
-    </select>
-    <button>保存</button>
-    <span class="meta">当前生效：{{ retention_live or '?' }} 天</span>
-  </form>
-  {% endif %}
+  <div class="card">
+    <h3>单点登录 · yz-login</h3>
+    {% if user.is_admin %}
+    <p class="meta">保存后即时生效，免重启。</p>
+    <form method="post" action="/settings/sso">
+      <div class="field">
+        <label>yz-login 平台地址</label>
+        <input type="text" name="yz_login_url" value="{{ sso.yz_login_url }}" style="width:100%">
+      </div>
+      <div class="field">
+        <label>应用 ID</label>
+        <input type="text" name="yz_app_id" value="{{ sso.yz_app_id }}" style="width:120px">
+      </div>
+      <div class="field">
+        <label>回调地址 <span class="meta">只读，须与 yz-login 后台注册一致</span></label>
+        <input type="text" value="{{ sso.callback_url }}" style="width:100%" disabled>
+      </div>
+      <div class="btnrow"><button>保存 SSO 配置</button></div>
+    </form>
+    {% else %}
+    <table class="kv">
+      <tr><td class="meta">平台地址</td><td class="mono">{{ sso.yz_login_url }}</td></tr>
+      <tr><td class="meta">应用 ID</td><td class="mono">{{ sso.yz_app_id }}</td></tr>
+    </table>
+    {% endif %}
+  </div>
 
-  <p class="meta" style="margin-top:12px"><a href="/auth/logout">登出 / 切换账号</a></p>
 </div>
 
 {% if user.is_admin %}
-<div class="card" style="max-width:760px">
-  <h3 style="margin-top:0">钉钉通知</h3>
-  <p class="meta">走内网 DingTalkVPN 微服务把告警发到钉钉。
-    接收人必须是在钉钉企业里的 11 位手机号。
-    <a href="http://192.168.0.18:5555" target="_blank" rel="noopener">打开 DingTalkVPN 管理界面</a></p>
+<div class="settings-full">
 
-  {% if nerr %}
-  <p style="color:var(--error)"><b>⚠ 发送失败：</b>{{ nerr }}</p>
-  {% endif %}
-  {% if nok %}
-  <p style="color:var(--success)"><b>✓ 已提交：</b>{{ nok }}</p>
-  {% endif %}
-
-  <form method="post" action="/settings/notify">
-    <div class="row" style="margin-bottom:10px">
-      <div>
-        <label>启用</label>
-        <select name="enabled">
-          <option value="1" {{ 'selected' if notify.enabled else '' }}>开启</option>
-          <option value="0" {{ 'selected' if not notify.enabled else '' }}>关闭</option>
-        </select>
-      </div>
-      <div style="flex:1;min-width:260px">
-        <label>服务地址</label>
-        <input type="text" name="url" value="{{ notify.url }}" placeholder="http://192.168.0.18:5555" style="width:100%">
-      </div>
-      <div style="flex:1;min-width:240px">
-        <label>API Key {% if notify.api_key_masked != '未配置' %}<span class="meta">（当前 {{ notify.api_key_masked }}）</span>{% endif %}</label>
-        <input type="text" name="api_key" value="{{ notify.api_key }}" placeholder="sk-dingtalk-api-…" style="width:100%">
-      </div>
-    </div>
-    <label>自动告警（三个触发器都边沿触发 + 去重，不会重复刷屏；恢复也会报）</label>
-    <div class="row" style="margin-bottom:10px;align-items:center">
-      <label style="display:flex;align-items:center;gap:6px;margin:0">
-        <input type="checkbox" name="ev_disk" value="1" {{ 'checked' if notify.events.disk_anomaly else '' }}>
-        磁盘新异常 <span class="meta">某块盘由好变坏时发一条</span></label>
-      <label style="display:flex;align-items:center;gap:6px;margin:0">
-        <input type="checkbox" name="ev_coll" value="1" {{ 'checked' if notify.events.collector_down else '' }}>
-        采集器掉线 <span class="meta">vector / cobian / victorialogs 断连时发</span></label>
-      <label style="display:flex;align-items:center;gap:6px;margin:0">
-        <input type="checkbox" name="ev_daily" value="1" {{ 'checked' if notify.events.daily_digest else '' }}>
-        每日汇总 <span class="meta">到点发一条概览（无异常也发）</span></label>
-      <span class="meta">每天</span>
-      <input type="text" name="daily_at" value="{{ notify.daily_at }}" style="width:70px" placeholder="10:00">
-    </div>
-
-    <label>接收人手机号（每行一个，也可用逗号分隔；非 11 位的会被自动丢掉）</label>
-    <textarea name="phones" rows="4" style="width:100%;background:var(--bg);color:var(--text);
-              border:1px solid var(--border);border-radius:7px;padding:7px 10px;
-              font-family:ui-monospace,monospace;font-size:13px"
-              placeholder="13293513336&#10;13800138000">{{ notify.phones|join('\n') }}</textarea>
-    <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+  <div class="card">
+    <h3>日志保留期</h3>
+    {% if reterr %}
+    <p class="alert alert-err"><b>保存失败（已回滚）：</b>{{ reterr }}</p>
+    {% endif %}
+    <p class="meta">保存后重建 VictoriaLogs 容器 —— 数据不丢，中断数秒。
+      依《网络安全法》日志留存不少于六个月，最短 180 天；缩短会清理超期旧数据。</p>
+    <form method="post" action="/settings/retention" class="btnrow" style="align-items:center">
+      <select name="retention_days">
+        {% for d in retention_choices %}
+        <option value="{{ d }}" {{ 'selected' if d == retention_days else '' }}>{{ d }} 天</option>
+        {% endfor %}
+      </select>
       <button>保存</button>
-      <span class="meta">已配置 {{ notify.phones|length }} 个接收人 ·
-        {{ '已启用' if notify.enabled else '未启用' }}</span>
-    </div>
-  </form>
+      <span class="meta">当前生效 <b class="mono">{{ retention_live or '?' }}</b> 天</span>
+    </form>
+  </div>
 
-  <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
-  <form method="post" action="/settings/notify/test" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <button class="btn-muted">发送测试消息</button>
-    <span class="meta">用上面已保存的接收人；想只发给自己可以在这里临时填一个号 →</span>
-    <input type="text" name="phones" placeholder="临时手机号（可留空）" style="width:200px">
-  </form>
-  <p class="meta" style="margin-top:8px">先点「保存」再「发送测试消息」—— 测试用的是已保存的配置。</p>
+  <div class="card">
+    <h3>钉钉通知</h3>
+    <p class="meta">走内网 DingTalkVPN 微服务把告警发到钉钉。接收人必须是在钉钉企业里的 11 位手机号。
+      <a href="http://192.168.0.18:5555" target="_blank" rel="noopener">打开 DingTalkVPN 管理界面</a></p>
+
+    {% if nerr %}
+    <p class="alert alert-err"><b>发送失败：</b>{{ nerr }}</p>
+    {% endif %}
+    {% if nok %}
+    <p class="alert alert-ok"><b>已提交：</b>{{ nok }}</p>
+    {% endif %}
+
+    <form method="post" action="/settings/notify">
+      <div class="row" style="margin-bottom:10px">
+        <div style="width:110px">
+          <label>总开关</label>
+          <select name="enabled">
+            <option value="1" {{ 'selected' if notify.enabled else '' }}>开启</option>
+            <option value="0" {{ 'selected' if not notify.enabled else '' }}>关闭</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:250px">
+          <label>服务地址</label>
+          <input type="text" name="url" value="{{ notify.url }}" placeholder="http://192.168.0.18:5555" style="width:100%">
+        </div>
+        <div style="flex:1;min-width:230px">
+          <label>API Key {% if notify.api_key_masked != '未配置' %}<span class="meta">当前 {{ notify.api_key_masked }}</span>{% endif %}</label>
+          <input type="text" name="api_key" value="{{ notify.api_key }}" placeholder="sk-dingtalk-api-…" style="width:100%">
+        </div>
+      </div>
+
+      <label>自动告警 <span class="meta">三个触发器都是边沿触发 + 去重，不重复刷屏；恢复也会报</span></label>
+      <div class="evrow">
+        <label class="ev"><input type="checkbox" name="ev_disk" value="1" {{ 'checked' if notify.events.disk_anomaly else '' }}>
+          <span>磁盘新异常<em>某块盘由好变坏时发一条</em></span></label>
+        <label class="ev"><input type="checkbox" name="ev_coll" value="1" {{ 'checked' if notify.events.collector_down else '' }}>
+          <span>采集器掉线<em>vector / cobian / victorialogs 断连时发</em></span></label>
+        <label class="ev"><input type="checkbox" name="ev_daily" value="1" {{ 'checked' if notify.events.daily_digest else '' }}>
+          <span>每日汇总<em>到点发一条概览，无异常也发</em></span></label>
+        <span class="ev-time">每天 <input type="text" name="daily_at" value="{{ notify.daily_at }}" style="width:66px" placeholder="10:00"></span>
+      </div>
+
+      <div class="field">
+        <label>接收人手机号 <span class="meta">每行一个，也可用逗号分隔；非 11 位会被自动丢掉</span></label>
+        <textarea name="phones" rows="4" style="width:100%" placeholder="13293513336&#10;13800138000">{{ notify.phones|join('\n') }}</textarea>
+      </div>
+
+      <div class="btnrow" style="margin-top:10px">
+        <button>保存</button>
+        <span class="meta">已配置 <b class="mono">{{ notify.phones|length }}</b> 个接收人 ·
+          {{ '已启用' if notify.enabled else '未启用' }}</span>
+      </div>
+    </form>
+
+    <hr>
+    <form method="post" action="/settings/notify/test" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn-muted">发送测试消息</button>
+      <input type="text" name="phones" placeholder="临时手机号（可留空，用已保存的接收人）" style="width:260px">
+      <span class="meta">先「保存」再测试 —— 测试用的是已保存的配置</span>
+    </form>
+  </div>
+
 </div>
 {% endif %}
 {% endblock %}
