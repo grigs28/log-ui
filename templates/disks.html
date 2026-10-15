@@ -53,6 +53,13 @@
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     <span style="flex:1"></span>
     {% if is_admin %}
+    {% if s.unfiled %}
+    <form method="post" action="/disks/archive" style="display:inline;margin:0">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <button class="btn" style="padding:2px 8px"
+              title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档（槽号顺延，事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
+    </form>
+    {% endif %}
     <form method="post" action="/disks/fill" style="display:inline;margin:0">
       <input type="hidden" name="server" value="{{ s.name }}">
       <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200" style="width:70px" title="补齐 0..N-1 槽位">

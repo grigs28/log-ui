@@ -366,6 +366,19 @@ def disks_server_delete(request: Request, name: str = Form(""),
     return RedirectResponse("/disks", status_code=303)
 
 
+@app.post("/disks/archive")
+def disks_archive(request: Request, server: str = Form(""),
+                  csrf_ok: None = Depends(csrf_protect)):
+    """把日志发现的盘落进档案（槽号顺延，事后可改）。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.archive_unfiled(server)
+    return RedirectResponse("/disks", status_code=303)
+
+
 @app.post("/disks/fill")
 def disks_fill(request: Request, server: str = Form(""), count: int = Form(0),
                csrf_ok: None = Depends(csrf_protect)):

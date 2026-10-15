@@ -187,6 +187,40 @@ def save_table(server: str, per_row, rows: list) -> None:
     save(d)
 
 
+def archive_unfiled(name: str) -> int:
+    """把日志里发现、档案里没有的盘落档。返回新增条数。
+
+    槽号从当前最大槽号往后顺延（日志不带槽位信息，先给出顺序位，事后可在
+    编辑盘位里改成真实槽号）。服务器本身没建档的，一并建。
+    """
+    name = (name or "").strip()
+    if not name:
+        return 0
+    log_disks = (poll_logs()["by_host"].get(name) or {}).get("disks", {}) or {}
+    if not log_disks:
+        return 0
+    d = load()
+    s = get_server(d, name)
+    if s is None:
+        s = {"name": name, "ip": (poll_logs()["by_host"].get(name) or {}).get("ip", ""),
+             "per_row": d["settings"]["default_per_row"], "disks": []}
+        d["servers"].append(s)
+    have = {x.get("dev") for x in s["disks"] if x.get("dev")}
+    nxt = max([int(x.get("slot", -1)) for x in s["disks"]] or [-1]) + 1
+    added = 0
+    for dev, ent in sorted(log_disks.items()):
+        if dev in have:
+            continue
+        s["disks"].append({"slot": nxt, "dev": dev,
+                           "osd": ent.get("osd", ""), "note": ""})
+        nxt += 1
+        added += 1
+    if added:
+        s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
+        save(d)
+    return added
+
+
 def fill_slots(server: str, count) -> None:
     """按数量补齐 0..count-1 的槽位（已有槽位保留，不覆盖）。"""
     d = load()
@@ -393,4 +427,5 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
             "auto": auto, "unbuilt": s.get("unbuilt", False),
             "count": len(disks), "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
+            "unfiled": sum(1 for x in disks if x.get("unfiled")),
             "state": st, "label": label}
