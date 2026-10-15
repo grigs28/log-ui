@@ -78,6 +78,16 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
     if action == "check":
         return f"{CHECK_SH} {dev}"
 
+    if action == "led-off":
+        # osd.led.sh 有 trap cleanup EXIT INT TERM HUP，SIGTERM 就能触发它自己的
+        # 关灯逻辑（storcli ... stop locate）。按**目标字符串**精确匹配，
+        # 免得把别的盘上的灯一起关掉；-f 与不带 -f 两种命令行分别匹配（互不包含）
+        slots = [s for s in _slots_of(host, dev) if _SLOT_RE.match(s)]
+        targets = " ".join(slots) if slots else dev
+        esc = re.escape(targets)
+        return (f"pkill -TERM -f 'osd\\.led\\.sh -f {esc}' || true; "
+                f"pkill -TERM -f 'osd\\.led\\.sh {esc}' || true; echo 已发送关灯")
+
     if action in ("led-fail", "led-locate"):
         flag = "-f " if action == "led-fail" else ""
         slots = [s for s in _slots_of(host, dev) if _SLOT_RE.match(s)]
@@ -139,7 +149,7 @@ def start(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> dict:
     host = (host or "").strip()
     if not host:
         raise Rejected("缺少主机名")
-    if action not in ("check", "led-fail", "led-locate"):
+    if action not in ("check", "led-fail", "led-locate", "led-off"):
         raise Rejected(f"未知动作: {action!r}")
     build_remote(action, host, dev, seconds)      # 先校验，非法就当场拒绝
 

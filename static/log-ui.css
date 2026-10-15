@@ -305,6 +305,39 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
           color:var(--text2); cursor:pointer; white-space:nowrap; }
 .bay-act:hover{ background:var(--accent); border-color:var(--accent); color:#000; transform:none; }
 
+/* 动作输出弹窗（重测 / 亮灯） */
+.actmodal{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.55);
+           display:flex; align-items:center; justify-content:center; padding:24px; }
+.actmodal[hidden]{ display:none; }
+.actbox{ background:var(--surface); border:1px solid var(--border-light); border-radius:10px;
+         width:min(1000px,100%); max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+.acthead{ display:flex; align-items:center; gap:10px; padding:10px 14px;
+          border-bottom:1px solid var(--border); }
+.acthead b{ font-size:14px; }
+.acthead button{ padding:3px 12px; font-size:12px; }
+
+/* 进度条：检测按已用时间估算，亮灯按剩余秒数倒着走 */
+.actbar{ height:6px; background:var(--border); overflow:hidden; }
+.actbar-fill{ height:100%; width:0; background:var(--accent);
+              transition:width .35s linear, background .2s; }
+.actbar-fill.ok{ background:var(--success); }
+.actbar-fill.err{ background:var(--error); }
+.actbar-fill.warn{ background:var(--warning); }
+
+/* 结论行：检测完是结论，亮灯时是倒计时 */
+.actverdict{ font-size:15px; font-weight:700; color:var(--text2); line-height:1.35; }
+.actverdict:not(:empty){ padding:11px 14px 10px; }
+.actverdict.ok{ color:var(--success); }
+.actverdict.err{ color:var(--error); }
+.actverdict.warn{ color:var(--warning); }
+
+.actcmd{ padding:6px 14px; border-bottom:1px solid var(--border);
+         font-family:ui-monospace,monospace; font-size:11px; word-break:break-all; color:var(--muted); }
+.actout{ margin:0; padding:12px 14px; overflow:auto; flex:1; min-height:180px; max-height:56vh;
+         font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word;
+         background:var(--bg); color:var(--text2); font-family:ui-monospace,monospace; }
+.actfoot{ padding:8px 14px; border-top:1px solid var(--border); }
+
 /* 状态徽章（绿=日志确认健康 / 黄=未知未验证 / 红=异常）：悬停看详情 */
 .sbadge{ display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600;
          line-height:1.5; padding:1px 7px; border-radius:999px; cursor:default;

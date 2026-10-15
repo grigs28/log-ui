@@ -253,8 +253,11 @@
       <b id="act-title">—</b>
       <span class="meta" id="act-state"></span>
       <span style="flex:1"></span>
+      <button type="button" class="btn-muted" id="act-led-off" hidden style="padding:2px 10px">关灯</button>
       <button type="button" class="btn-muted" id="act-close" style="padding:2px 10px">关闭</button>
     </div>
+    <div class="actbar"><div class="actbar-fill" id="act-bar"></div></div>
+    <div class="actverdict" id="act-verdict"></div>
     <div class="actcmd meta" id="act-cmd"></div>
     <pre class="actout" id="act-out">启动中…</pre>
     <div class="actfoot meta" id="act-foot"></div>
@@ -266,43 +269,129 @@
 {% block scripts %}
 <script>
 /* ---- 单盘动作：重测 / 亮灯 ----
-   格子上悬停出现两个按钮，点了直接起后台任务 → 弹窗轮询输出。
-   检测要几十秒（含测速），所以异步；亮灯是脱离式下发，1 秒返回、灯自己亮 120 秒。 */
+   格子上悬停出现两个按钮，点了起后台任务 → 弹窗显示进度条 + 结论 + 实时输出。
+   检测含测速（健康盘 ~11 秒、坏盘可能 90 秒+）故异步；亮灯是脱离式下发，
+   1 秒返回、灯自己在节点上亮 120 秒，弹窗做倒计时并提供「关灯」。 */
 (function () {
   var modal = document.getElementById('actmodal');
   if (!modal) return;
-  var timer = null;
+  var timer = null, cdTimer = null, ctx = null;
+
+  var elTitle = document.getElementById('act-title'),
+      elState = document.getElementById('act-state'),
+      elBar   = document.getElementById('act-bar'),
+      elVerd  = document.getElementById('act-verdict'),
+      elCmd   = document.getElementById('act-cmd'),
+      elOut   = document.getElementById('act-out'),
+      elFoot  = document.getElementById('act-foot'),
+      elOff   = document.getElementById('act-led-off');
+
+  var CHECK_EXPECT = 12;          // 健康盘的典型耗时，进度条按它估算
+  var LED_SECONDS  = 120;
+
+  function bar(pct, cls) {
+    elBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    elBar.className = 'actbar-fill' + (cls ? ' ' + cls : '');
+  }
 
   function showOut(title, cmd) {
     modal.hidden = false;
-    document.getElementById('act-title').textContent = title;
-    document.getElementById('act-cmd').textContent = '命令：/opt/grigs/w.sh ssh.run.sh <节点IP> -- "' + cmd + '"';
-    document.getElementById('act-out').textContent = '启动中…';
-    document.getElementById('act-state').textContent = '运行中';
-    document.getElementById('act-foot').textContent = '';
+    elTitle.textContent = title;
+    elCmd.textContent = '命令：/opt/grigs/w.sh ssh.run.sh <节点IP> -- "' + cmd + '"';
+    elOut.textContent = '启动中…';
+    elState.textContent = '运行中';
+    elVerd.textContent = '';
+    elVerd.className = 'actverdict';
+    elFoot.textContent = '';
+    elOff.hidden = true;
+    bar(3);
+  }
+
+  function stopTimers() { clearInterval(timer); clearInterval(cdTimer); }
+
+  /* 亮灯：任务 1 秒就返回了，之后是本地倒计时 */
+  function startCountdown(sec) {
+    var left = sec;
+    elOff.hidden = false;
+    bar(100);
+    elVerd.textContent = '💡 已点亮，' + sec + ' 秒后自动熄灭';
+    elVerd.className = 'actverdict warn';
+    cdTimer = setInterval(function () {
+      left--;
+      var pct = Math.max(0, left / sec * 100);
+      bar(pct, left <= 15 ? 'warn' : '');
+      elState.textContent = '还有 ' + Math.max(0, left) + ' 秒';
+      if (left <= 0) {
+        clearInterval(cdTimer);
+        elVerd.textContent = '灯已自动熄灭';
+        elVerd.className = 'actverdict';
+        elFoot.textContent = '（到时间自动关的；想提前关可以下次点「亮灯」后用弹窗里的「关灯」）';
+        elOff.hidden = true;
+      }
+    }, 1000);
   }
 
   function poll(id, act) {
     fetch('/disks/act/' + id).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || j.state === 'missing') { clearInterval(timer); return; }
-      var out = document.getElementById('act-out');
-      out.textContent = j.output ||
-        (j.state === 'running' ? '执行中…（检测含测速，健康盘约 10 秒，坏盘可能 90 秒以上）' : '（无输出）');
-      out.scrollTop = out.scrollHeight;
-      document.getElementById('act-state').textContent =
-        (j.state === 'running' ? '运行中 ' : '完成 ') + j.elapsed + 's';
-      if (j.state !== 'running') {
-        clearInterval(timer);
-        var ok = j.rc === 0;
-        document.getElementById('act-state').textContent =
-          (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
-        var v = j.verdict || {};
-        document.getElementById('act-foot').textContent = act === 'check'
-          ? ('结论：' + (v.status || '未解析到状态行') + '   刷新页面即可看到新状态')
-          : '灯已下发，将在节点上亮 120 秒后自动熄灭（可多块盘同时点）';
-        if (act === 'check') setTimeout(function () { location.reload(); }, 2500);
+      if (!j || j.state === 'missing') { stopTimers(); return; }
+      elOut.textContent = j.output ||
+        (j.state === 'running' ? '执行中…' : '（无输出）');
+      elOut.scrollTop = elOut.scrollHeight;
+
+      if (j.state === 'running') {
+        elState.textContent = '运行中 ' + j.elapsed + 's';
+        if (act === 'check') bar(Math.min(94, j.elapsed / CHECK_EXPECT * 100));
+        return;
+      }
+      stopTimers();
+      var ok = j.rc === 0;
+      elState.textContent = (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
+
+      if (act === 'check') {
+        var v = j.verdict || {}, st = v.status || '';
+        var cls = st.indexOf('✗') === 0 ? 'err' : (st.indexOf('⚠') === 0 ? 'warn' : (ok ? 'ok' : 'err'));
+        bar(100, cls);
+        elVerd.textContent = st ? ('结论：' + st) : '未解析到状态行';
+        elVerd.className = 'actverdict ' + cls;
+        elFoot.textContent = '刷新页面即可看到新状态';
+        setTimeout(function () { location.reload(); }, 3000);
+      } else if (act === 'led-off') {
+        bar(100);
+        elVerd.textContent = '🔅 已发送关灯';
+        elVerd.className = 'actverdict';
+        elOff.hidden = true;
+      } else {
+        startCountdown(j.seconds || LED_SECONDS);
       }
     }).catch(function () {});
+  }
+
+  function fire(act, server, dev, slots) {
+    var cmd = act === 'check'
+      ? '/opt/grigs/osd/osd.check.sh ' + dev
+      : (act === 'led-off'
+          ? "pkill -TERM -f 'osd\\.led\\.sh -f " + (slots || dev) + "'"
+          : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh '
+            + (act === 'led-fail' ? '-f ' : '') + (slots || dev));
+    var name = ({ check: '重测', 'led-fail': '亮灯', 'led-locate': '绿灯定位', 'led-off': '关灯' })[act] || act;
+    showOut(name + ' · ' + server + ' ' + dev, cmd);
+
+    var f = new FormData();
+    f.append('server', server); f.append('dev', dev); f.append('act', act); f.append('back', server);
+    fetch('/disks/act', { method: 'POST', body: f, headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.id) {
+        elOut.textContent = '任务未能启动' + (j && j.error ? '：' + j.error : '');
+        elState.textContent = '已拒绝'; bar(100, 'err');
+        return;
+      }
+      stopTimers();
+      timer = setInterval(function () { poll(j.id, act); }, 1000);
+      poll(j.id, act);
+    }).catch(function (err) {
+      elOut.textContent = '请求失败：' + err;
+      elState.textContent = '失败'; bar(100, 'err');
+    });
   }
 
   document.addEventListener('click', function (e) {
@@ -312,33 +401,18 @@
     e.stopPropagation();
     var bay = btn.closest('.bay-live');
     if (!bay || !bay.dataset.dev) return;
-    var act = btn.dataset.act;
-    var dev = bay.dataset.dev;
-    var server = bay.closest('.baymap').dataset.server;
-    var cmd = act === 'check'
-      ? '/opt/grigs/osd/osd.check.sh ' + dev
-      : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh -f ' + (bay.dataset.slot || dev);
-    showOut((act === 'check' ? '重测' : '亮灯') + ' · ' + server + ' ' + dev, cmd);
-
-    var f = new FormData();
-    f.append('server', server); f.append('dev', dev); f.append('act', act); f.append('back', server);
-    fetch('/disks/act', { method: 'POST', body: f, headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || !j.id) {
-        document.getElementById('act-out').textContent = '任务未能启动' + (j && j.error ? '：' + j.error : '');
-        document.getElementById('act-state').textContent = '已拒绝';
-        return;
-      }
-      clearInterval(timer);
-      timer = setInterval(function () { poll(j.id, act); }, 1000);
-      poll(j.id, act);
-    }).catch(function (err) {
-      document.getElementById('act-out').textContent = '请求失败：' + err;
-    });
+    var map = bay.closest('.baymap');
+    ctx = { server: map.dataset.server, dev: bay.dataset.dev, slots: bay.dataset.slot || '' };
+    fire(btn.dataset.act, ctx.server, ctx.dev, ctx.slots);
   }, true);
 
+  elOff.addEventListener('click', function () {
+    if (!ctx) return;
+    fire('led-off', ctx.server, ctx.dev, ctx.slots);
+  });
+
   document.getElementById('act-close').addEventListener('click', function () {
-    modal.hidden = true; clearInterval(timer);
+    modal.hidden = true; stopTimers();
   });
 })();
 </script>

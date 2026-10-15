@@ -496,6 +496,7 @@ def disks_act_poll(request: Request, job_id: str):
     return {"state": j["state"], "rc": j["rc"], "action": j["action"],
             "host": j["host"], "dev": j["dev"], "cmd": j["cmd"],
             "elapsed": round((j["ended"] or time.time()) - j["started"], 1),
+            "seconds": j.get("seconds") or 0,
             "verdict": j.get("verdict"), "output": j.get("output", "")}
 
 
