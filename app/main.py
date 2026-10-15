@@ -27,6 +27,23 @@ BASE = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="log-ui")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax")
+
+
+@app.middleware("http")
+async def _no_store_html(request: Request, call_next):
+    """HTML 一律不缓存。
+
+    页面是服务端渲染的，JS 内联在 HTML 里。而 TemplateResponse 不带任何缓存头，
+    浏览器就会**启发式缓存** HTML —— 普通 F5 可能直接用本地副本，
+    于是「改了前端但页面没变」，排查起来非常费劲（2026-10-15 右键菜单不弹
+    就是这么被坑的）。静态资源另说：StaticFiles 自带 etag/last-modified，
+    正常协商缓存即可。
+    """
+    resp = await call_next(request)
+    if resp.headers.get("content-type", "").startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+    return resp
 app.include_router(auth_router)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))

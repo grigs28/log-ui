@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.3] - 2026-10-15
+
+### Fixed
+- **页面 HTML 被浏览器启发式缓存，导致改了前端但页面没变** ——
+  `TemplateResponse` 不带任何缓存头，浏览器就自己决定缓存多久，
+  普通 F5 可能直接用本地副本、新内联 JS 根本不加载。
+  实测响应头里 HTML 确实既无 `Cache-Control` 也无 `ETag`
+  （静态 CSS 有 `etag`/`last-modified`，所以只有 HTML 中招）。
+  现在统一给 `text/html` 响应加 `Cache-Control: no-store, no-cache, must-revalidate`
+
+  > 这是排查「右键菜单不弹」时挖出来的真凶：菜单的 DOM、CSS、JS 在生产上
+  > 全都在（逐项验证过），但浏览器拿的是旧 HTML。
+
 ## [1.2.2] - 2026-10-15
 
 ### Added
