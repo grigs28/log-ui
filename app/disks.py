@@ -130,10 +130,32 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
     return d
 
 
-def set_view(server: str, mode: str = "", per_row=0) -> None:
+def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
+    """取服务器档案；不存在就建一个。
+
+    视图设置和槽位数都是「针对这台机器」的操作，日志发现但未建档的机器点按钮
+    不该静默失败——顺手建档，用户不想要可以点「删档案」。
+    """
+    name = (name or "").strip()
+    if not name:
+        return None
+    s = get_server(d, name)
+    if s is None:
+        s = {"name": name, "ip": (ip or "").strip(),
+             "mode": _clamp_mode(d["settings"].get("default_mode")),
+             "per_row": _clamp_per_row(d["settings"]["default_per_row"]),
+             "disks": []}
+        d["servers"].append(s)
+    elif ip and not s.get("ip"):
+        s["ip"] = ip.strip()
+    s.setdefault("disks", [])
+    return s
+
+
+def set_view(server: str, mode: str = "", per_row=0, ip: str = "") -> None:
     """改视图：横/竖 + 横排每排数量。per_row<=0 表示不改。"""
     d = load()
-    s = get_server(d, (server or "").strip())
+    s = _ensure(d, server, ip)
     if s is None:
         return
     if mode:
@@ -274,7 +296,7 @@ def archive_unfiled(name: str) -> int:
     return added
 
 
-def set_slot_count(server: str, count) -> int:
+def set_slot_count(server: str, count, ip: str = "") -> int:
     """声明机箱槽位数：面板显示 0..count-1 共 count 个格子，装了几块就几块亮。
 
     未占用的格子是空槽（可被「建档」或拖动填充）；多出来的空格子直接删掉。
@@ -282,7 +304,7 @@ def set_slot_count(server: str, count) -> int:
     避免设置值小于实际装盘数时把盘挤出面板。返回最终生效的槽位数。
     """
     d = load()
-    s = get_server(d, (server or "").strip())
+    s = _ensure(d, server, ip)
     if s is None:
         return 0
     try:

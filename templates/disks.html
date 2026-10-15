@@ -64,6 +64,7 @@
   <div class="baytools">
     <form method="post" action="/disks/view" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
       <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="ip" value="{{ s.ip }}">
       <span class="meta">视图</span>
       <select name="mode" title="竖排 = 一列到底；横排 = 多列铺开">
         <option value="h" {% if s.mode == 'h' %}selected{% endif %}>横排</option>
@@ -77,6 +78,7 @@
 
     <form method="post" action="/disks/slots" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
       <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="ip" value="{{ s.ip }}">
       <span class="meta">槽位数</span>
       <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200"
              title="机箱实际槽位数。如 12 个槽位只装 8 块盘，其余 4 个显示为空槽；多余的空槽会被删除，已装盘的槽号不动">

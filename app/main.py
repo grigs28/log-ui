@@ -381,7 +381,7 @@ def disks_archive(request: Request, server: str = Form(""),
 
 @app.post("/disks/view")
 def disks_view(request: Request, server: str = Form(""), mode: str = Form(""),
-               per_row: int = Form(0),
+               per_row: int = Form(0), ip: str = Form(""),
                csrf_ok: None = Depends(csrf_protect)):
     """横竖显示开关 + 横排每排数量。"""
     user = _require_user(request)
@@ -389,7 +389,7 @@ def disks_view(request: Request, server: str = Form(""), mode: str = Form(""),
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
-    disks.set_view(server, mode, per_row)
+    disks.set_view(server, mode, per_row, ip)
     return RedirectResponse("/disks", status_code=303)
 
 
@@ -409,6 +409,7 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
 
 @app.post("/disks/slots")
 def disks_slots(request: Request, server: str = Form(""), count: int = Form(0),
+                ip: str = Form(""),
                 csrf_ok: None = Depends(csrf_protect)):
     """声明机箱槽位数（如 12 个槽位里只装 8 块盘，其余是空槽）。"""
     user = _require_user(request)
@@ -416,7 +417,7 @@ def disks_slots(request: Request, server: str = Form(""), count: int = Form(0),
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
-    disks.set_slot_count(server, count)
+    disks.set_slot_count(server, count, ip)
     return RedirectResponse("/disks", status_code=303)
 
 
