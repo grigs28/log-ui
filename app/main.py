@@ -19,6 +19,7 @@ from . import vl
 from . import servers as srv
 from . import vecsync
 from . import collectors
+from . import disks
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -308,6 +309,71 @@ def servers_unignore(request: Request, name: str = Form(""),
     ok, msg = vecsync.sync()
     dest = "/servers" if ok else f"/servers?vecerr={quote(msg)}"
     return RedirectResponse(dest, status_code=303)
+
+
+# ---------------- 磁盘盘位图 ----------------
+@app.get("/disks")
+def disks_page(request: Request):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    data = disks.merged()
+    return templates.TemplateResponse(
+        request, "disks.html",
+        {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
+         "edit_server": None, **data},
+    )
+
+
+@app.post("/disks/server/add")
+def disks_server_add(request: Request, name: str = Form(""), ip: str = Form(""),
+                     per_row: int = Form(0),
+                     csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.upsert_server(name, ip, per_row or None)
+    return RedirectResponse("/disks", status_code=303)
+
+
+@app.post("/disks/server/delete")
+def disks_server_delete(request: Request, name: str = Form(""),
+                        csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.remove_server(name)
+    return RedirectResponse("/disks", status_code=303)
+
+
+@app.post("/disks/fill")
+def disks_fill(request: Request, server: str = Form(""), count: int = Form(0),
+               csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.fill_slots(server, count)
+    return RedirectResponse("/disks", status_code=303)
+
+
+@app.post("/disks/save")
+def disks_save(request: Request, server: str = Form(""), per_row: int = Form(0),
+               slot: list[str] = Form([]), dev: list[str] = Form([]),
+               osd: list[str] = Form([]), note: list[str] = Form([]),
+               csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.save_table(server, per_row, list(zip(slot, dev, osd, note)))
+    return RedirectResponse("/disks", status_code=303)
 
 
 # ---------------- 实时 tail (WebSocket) ----------------

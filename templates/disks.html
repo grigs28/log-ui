@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}磁盘 · log-ui{% endblock %}
+{% block content %}
+<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <h3 style="margin:0">磁盘盘位图</h3>
+  <span class="meta">按服务器名排列 · 面板默认为槽号 · 归属与状态由日志自动带出，其余可手工录入</span>
+  <span style="flex:1"></span>
+  <span class="meta">{{ stats.servers }} 台 · {{ stats.disks }} 盘
+    {% if stats.bad %}<span class="lv lv-error">{{ stats.bad }} 异常</span>{% endif %}
+    {% if stats.unbuilt %}<span class="tag">{{ stats.unbuilt }} 未建档</span>{% endif %}
+  </span>
+</div>
+
+{% if is_admin and not edit_server %}
+<div class="card" style="max-width:760px;margin-bottom:14px">
+  <form method="post" action="/disks/server/add" class="row">
+    <div><label>服务器名</label><input type="text" name="name" required placeholder="如 v5-ctr02"></div>
+    <div><label>IP</label><input type="text" name="ip" placeholder="192.168.93.x"></div>
+    <div><label>每排数量</label><input type="number" name="per_row" value="{{ settings.default_per_row }}" min="1" max="24" style="width:90px"></div>
+    <div><button>添加服务器</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% if runs %}
+<div class="card" style="margin-bottom:14px">
+  <details>
+    <summary><span class="meta">最近 {{ runs|length }} 次 OSD 轮询记录（点击展开）</span></summary>
+    <div class="logpane" style="margin-top:8px">
+      <table>
+        <tr><th>时间</th><th>轮询</th></tr>
+        {% for r in runs %}
+        <tr>
+          <td class="time">{{ r.ts or '-' }}</td>
+          <td class="meta">{% for t in r.lines %}{{ t }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </details>
+</div>
+{% endif %}
+
+{% for s in servers %}
+<div class="card" style="margin-bottom:14px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+    <b>{{ s.name }}</b>
+    <span class="sbadge sbadge-{{ s.state }}"
+          title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;共 {{ s.count }} 盘 · 异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}">
+      <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
+    <span class="meta">{{ s.ip or '无 IP' }}</span>
+    <span class="meta">{{ s.count }} 盘</span>
+    {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
+    <span style="flex:1"></span>
+    {% if is_admin %}
+    <form method="post" action="/disks/fill" style="display:inline;margin:0">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200" style="width:70px" title="补齐 0..N-1 槽位">
+      <button class="btn btn-muted" style="padding:2px 8px" title="按数量补齐空槽位（已有槽位保留）">补槽位</button>
+    </form>
+    {% if not s.auto %}
+    <form method="post" action="/disks/server/delete" style="display:inline;margin:0"
+          onsubmit="return confirm('删除 {{ s.name }} 的盘位档案？（日志仍会显示为「日志发现」）')">
+      <input type="hidden" name="name" value="{{ s.name }}">
+      <button class="btn btn-muted" style="padding:2px 8px">删档案</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {# ---------- 面板 ---------- #}
+  <div class="baymap" style="--per-row:{{ s.per_row }}">
+    {% for row in s.rows %}
+      {% for d in row %}
+      <div class="bay bay-{{ d.state }}"
+           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.attr %} · {{ d.attr }}{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issue %}{{ d.issue }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}">
+        <div class="bay-slot">{{ d.slot if d.slot is not none else '—' }}</div>
+        <div class="bay-dev">{{ d.dev.replace('/dev/','') if d.dev else '' }}</div>
+        <div class="bay-meta">
+          {% if d.osd %}osd.{{ d.osd }}{% elif d.attr %}{{ d.attr }}{% endif %}
+        </div>
+        {% if d.state != 'none' %}
+        <span class="sbadge sbadge-{{ d.state }}">
+          <span class="dot {{ d.state if d.state in ('ok','err','warn') else '' }}"></span>{{ d.label }}
+        </span>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% for _ in range(s.per_row - row|length) %}<div class="bay bay-vacant"></div>{% endfor %}
+    {% endfor %}
+    {% if not s.rows %}<div class="meta">尚无盘位——先在下方「编辑盘位」录盘，或用「补槽位」建空格子</div>{% endif %}
+  </div>
+
+  {# ---------- 编辑 ---------- #}
+  {% if is_admin %}
+  <details style="margin-top:10px">
+    <summary class="meta">编辑盘位（{{ s.count }} 条）</summary>
+    <form method="post" action="/disks/save" style="margin-top:8px">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <div style="margin-bottom:8px">
+        <label>每排数量（决定面板排布：1 = 竖着一列；盘数/2 = 横着两排）</label>
+        <input type="number" name="per_row" value="{{ s.per_row }}" min="1" max="24" style="width:80px">
+      </div>
+      <div class="logpane">
+        <table>
+          <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
+          {% for d in s.disks %}
+          <tr>
+            <td><input name="slot" value="{{ d.slot if d.slot is not none else '' }}" style="width:60px"></td>
+            <td><input name="dev" value="{{ d.dev }}" placeholder="/dev/sdX"></td>
+            <td><input name="osd" value="{{ d.osd }}" placeholder="如 85" style="width:90px"></td>
+            <td><input name="note" value="{{ d.note }}" placeholder="如 机箱A-第2排"></td>
+            <td class="meta">{% if d.issue %}<span class="lv lv-error">异常</span>{% elif d.known %}✓{% endif %}</td>
+          </tr>
+          {% endfor %}
+          <tr>
+            <td><input name="slot" placeholder="新" style="width:60px"></td>
+            <td><input name="dev" placeholder="/dev/sdX"></td>
+            <td><input name="osd" placeholder="如 85" style="width:90px"></td>
+            <td><input name="note" placeholder="新增一行"></td>
+            <td class="meta">—</td>
+          </tr>
+        </table>
+      </div>
+      <div style="margin-top:8px"><button>保存盘位</button>
+        <span class="meta">槽号留空的行会被删除；填写槽号即新增/覆盖该槽</span></div>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if not servers %}
+<div class="card"><p class="meta">暂无服务器。可在上方添加，或检查 NAS hosts 文件与 osd-poll 日志是否可达。</p></div>
+{% endif %}
+{% endblock %}

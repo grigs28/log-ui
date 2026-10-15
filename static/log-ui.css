@@ -159,3 +159,31 @@ details summary{ cursor:pointer; color:var(--text2); font-size:13px; }
 details summary:hover{ color:var(--text); }
 hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 ::selection{ background:color-mix(in srgb,var(--accent) 30%,transparent); }
+
+/* 磁盘盘位图（面板式）：--per-row 控制每排格数（1 = 竖着一列） */
+.baymap{ display:grid; grid-template-columns:repeat(var(--per-row,4), minmax(0,1fr));
+         gap:6px; margin-top:8px; }
+.bay{ position:relative; border:1px solid var(--border-light); border-radius:6px;
+      background:var(--surface2); padding:6px 4px; text-align:center; min-height:64px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; }
+.bay-slot{ font-size:16px; font-weight:700; color:var(--text2); line-height:1.05; }
+.bay-dev{ font-size:11px; color:var(--text); letter-spacing:.2px; }
+.bay-meta{ font-size:10px; color:var(--muted); max-width:100%;
+           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bay-st{ font-size:12px; line-height:1; }
+.bay-ok{ border-color:rgba(52,211,153,.55); }
+.bay-warn{ border-color:rgba(251,191,36,.55); }
+.bay-err{ border-color:var(--error); background:rgba(248,113,113,.12); }
+.bay-err .bay-slot{ color:var(--error); }
+.bay-none{ border-style:dashed; opacity:.55; }
+.bay-vacant{ border:1px dashed var(--border); background:transparent; min-height:64px; }
+
+/* 状态徽章（绿=日志确认健康 / 黄=未知未验证 / 红=异常）：悬停看详情 */
+.sbadge{ display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600;
+         line-height:1.5; padding:1px 7px; border-radius:999px; cursor:default;
+         white-space:nowrap; }
+.sbadge .dot{ width:6px; height:6px; }
+.sbadge-ok{ color:var(--success); background:rgba(52,211,153,.14); }
+.sbadge-warn{ color:var(--warning); background:rgba(251,191,36,.14); }
+.sbadge-err{ color:var(--error); background:rgba(248,113,113,.16); }
+.sbadge-none{ color:var(--muted); background:rgba(148,163,184,.08); }
