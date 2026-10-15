@@ -82,6 +82,40 @@ def static_checks() -> int:
     return bad
 
 
+# 模板里必须存在的功能标记。用脚本做字符串替换时，切片范围算错会把整段
+# 功能悄悄删掉（语法仍然合法、自检也过）—— 已经栽过两次：
+#   · Python 里删掉了 fetch_hosts/_epoch（靠 pyflakes 抓到）
+#   · 模板里删掉了拖动排序 + 回跳锚点的两段 JS（pyflakes 管不到，直到用户发现）
+# 这里按功能点名，删了就报错。
+FEATURE_MARKERS = {
+    "templates/disks.html": [
+        ("拖动排序", "dragstart"),
+        ("拖动保存接口", "/disks/order"),
+        ("保存顺序提示条", "ordersave"),
+        ("操作后回跳卡片", "srv-"),
+        ("每排/排数联动", "slot-count"),
+        ("单盘动作按钮", "bay-act"),
+        ("动作输出弹窗", "actmodal"),
+        ("进度条", "actbar-fill"),
+        ("物理盘位属性", "data-dev"),
+    ],
+    "templates/base.html": [("脚本块", "{% block scripts %}")],
+}
+
+
+def template_markers() -> int:
+    bad = 0
+    for f, markers in FEATURE_MARKERS.items():
+        txt = (BASE / f).read_text(encoding="utf-8")
+        missing = [name for name, tok in markers if tok not in txt]
+        if missing:
+            print(f"  ❌ {f} 缺少功能标记: {', '.join(missing)}")
+            bad += 1
+        else:
+            print(f"  ✅ {f} 功能标记齐全（{len(markers)} 项）")
+    return bad
+
+
 def smoke_routes() -> int:
     """打一遍 /disks 全部路由，确认没有 5xx。数据全在临时目录里。"""
     sys.path.insert(0, str(BASE))
@@ -152,6 +186,8 @@ def main() -> int:
 
     print("静态检查")
     bad = static_checks()
+    print("\n模板功能标记")
+    bad += template_markers()
     if not a.static:
         print("\n路由冒烟（数据写入临时目录，不碰 config/disks.yaml）")
         bad += smoke_routes()

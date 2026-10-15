@@ -437,4 +437,149 @@
   });
 })();
 </script>
+<script>
+/* 提交后回到原来那张卡片。
+   页面上有 20 台服务器，点一次「应用」就滚回顶部的话得重新找，
+   所以服务端跳转带 ?focus=<服务器名>，这里滚过去并闪一下。
+   用 replaceState 把参数抹掉，免得刷新时又跳一次。 */
+(function () {
+  var p = new URLSearchParams(location.search);
+  var name = p.get('focus');
+  if (!name) return;
+  var el = document.getElementById('srv-' + name);
+  if (!el) return;
+  el.scrollIntoView({ block: 'start' });
+  el.classList.add('card-focus');
+  setTimeout(function () { el.classList.remove('card-focus'); }, 2400);
+  p.delete('focus');
+  var qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+})();
+
+/* 拖动盘位改显示位置。落地后由「保存顺序」POST 给 /disks/order，
+   槽号按新的视觉顺序重排。空格子（.bay-vacant）只是补位，不参与拖动。 */
+/* ---- 每排 / 排数 / 总槽位数 三者的联动 ----
+   总槽位数是只读派生值。两个输入框分工不同，避免「改了一个却被另一个覆盖」：
+     改「每排」→ 保持总槽位数不变，排数自动重算（只改形状）
+     改「排数」→ 总槽位数跟着变（这才是在改机箱大小）           */
+(function () {
+  Array.prototype.forEach.call(document.querySelectorAll('.baytools form'), function (f) {
+    var per = f.querySelector('input[name="per_row"]');
+    var row = f.querySelector('input[name="rows"]');
+    var out = f.querySelector('.slot-count');
+    if (!per || !row || !out) return;
+
+    function total() { return (+per.value || 1) * (+row.value || 1); }
+    function paint() { out.textContent = total(); }
+
+    per.addEventListener('input', function () {
+      // 形状变了、机箱没变：排数倒推回同一个总槽位数
+      var want = +out.dataset.slots || (+out.dataset.rows * +out.dataset.perRow);  // 实际盘位数
+      if (want > 0 && +per.value > 0) {
+        row.value = Math.max(1, Math.ceil(want / (+per.value || 1)));
+      }
+      paint();
+    });
+    row.addEventListener('input', paint);
+    paint();
+  });
+})();
+
+(function () {
+  var dirty = {};      // server -> true
+
+  function saveBar(server) {
+    return document.querySelector('.ordersave[data-server="' + server + '"]');
+  }
+
+  function markDirty(server) {
+    if (dirty[server]) return;
+    dirty[server] = true;
+    var bar = saveBar(server);
+    if (bar) bar.hidden = false;
+  }
+
+  function resetDirty(server) {
+    dirty[server] = false;
+    var bar = saveBar(server);
+    if (bar) bar.hidden = true;
+  }
+
+  /* 交换两个元素在 DOM 中的位置（占位符法，相邻/不相邻都正确） */
+  function swap(a, b) {
+    var pa = a.parentNode, pb = b.parentNode;
+    var mark = document.createComment('');
+    pa.insertBefore(mark, a);
+    pb.insertBefore(a, b);
+    pa.insertBefore(b, mark);
+    pa.removeChild(mark);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.baymap'), function (map) {
+    var server = map.dataset.server;
+
+    map.addEventListener('dragstart', function (e) {
+      var bay = e.target.closest && e.target.closest('.bay-live');
+      if (!bay) { e.preventDefault(); return; }
+      bay.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', bay.dataset.dev || ''); } catch (_) {}
+    });
+
+    map.addEventListener('dragend', function () {
+      var bay = map.querySelector('.bay-live.dragging');
+      if (bay) bay.classList.remove('dragging');
+      // 补位空格子统一挪到末尾，重排后最后一行依旧补齐
+      Array.prototype.forEach.call(map.querySelectorAll('.bay-vacant'), function (v) {
+        map.appendChild(v);
+      });
+    });
+
+    map.addEventListener('dragover', function (e) {
+      var drag = map.querySelector('.bay-live.dragging');
+      if (!drag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var over = e.target.closest && e.target.closest('.bay-live');
+      if (!over || over === drag || over.parentNode !== map) return;
+      swap(drag, over);
+      markDirty(server);
+    });
+
+    map.addEventListener('drop', function (e) { e.preventDefault(); });
+  });
+
+  /* 保存条按钮 */
+  Array.prototype.forEach.call(document.querySelectorAll('.ordersave'), function (bar) {
+    var server = bar.dataset.server;
+    bar.addEventListener('click', function (e) {
+      var act = e.target.dataset && e.target.dataset.act;
+      if (!act) return;
+      if (act === 'reset') { location.reload(); return; }
+      var map = document.querySelector('.baymap[data-server="' + server + '"]');
+      if (!map) return;
+      var f = document.createElement('form');
+      f.method = 'post';
+      f.action = '/disks/order';
+      function add(name, val) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = name; i.value = val;
+        f.appendChild(i);
+      }
+      add('server', server);
+      add('ip', map.dataset.ip || '');
+      add('back', server);
+      Array.prototype.forEach.call(map.querySelectorAll('.bay-live'), function (b) {
+        add('dev', b.dataset.dev || '');
+        add('osd', b.dataset.osd || '');
+        add('note', b.dataset.note || '');
+        add('size', b.dataset.size || '');
+      });
+      document.body.appendChild(f);
+      resetDirty(server);
+      f.submit();
+    });
+  });
+})();
+</script>
 {% endblock %}
