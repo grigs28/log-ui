@@ -84,6 +84,9 @@ header nav a{
   transition:color .15s, border-color .15s;
 }
 header nav a:hover{ color:var(--ink); border-bottom-color:var(--rule); }
+/* 当前页：下缘一道定位灯 —— 「蓝」在这里是「就是这一个」的意思 */
+header nav a.on{ color:var(--ink); border-bottom-color:var(--led-loc);
+                 box-shadow:0 1px 8px -4px var(--led-loc); }
 header .spacer{ flex:1; }
 header .user{ color:var(--ink-3); font-size:12px; font-family:var(--mono); }
 header .user span{ color:var(--ink-2); }
@@ -115,7 +118,8 @@ main{ padding:16px 18px 40px; max-width:1560px; margin:0 auto; animation:fadeInO
 /* ── 计数器：仪表读数，不是 KPI 卡片 ─────────────────── */
 .tile{
   background:var(--panel); border:1px solid var(--rule); border-radius:var(--r);
-  padding:14px 16px; position:relative; overflow:hidden;
+  padding:15px 16px; position:relative; overflow:hidden;
+  display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap;
 }
 /* 左侧一道指示灯条：亮的是状态色，灭的是灰 —— 面板上的「通道」指示 */
 .tile::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--led-off); }
@@ -123,11 +127,12 @@ main{ padding:16px 18px 40px; max-width:1560px; margin:0 auto; animation:fadeInO
 .tile-err::before{  background:var(--led-err);  box-shadow:0 0 12px -2px var(--led-err); }
 .tile-warn::before{ background:var(--led-warn); box-shadow:0 0 12px -2px var(--led-warn); }
 .tile-info::before{ background:var(--led-loc);  box-shadow:0 0 12px -2px var(--led-loc); }
+/* 仪表读数：数字在左、标签在右同一行 —— 不是「大数字 + 小标签 + 一大片空」 */
 .tile .n{
-  font-family:var(--mono); font-size:30px; font-weight:600; letter-spacing:-.02em;
-  line-height:1.05; font-variant-numeric:tabular-nums; color:var(--ink);
+  font-family:var(--mono); font-size:34px; font-weight:600; letter-spacing:-.02em;
+  line-height:1; font-variant-numeric:tabular-nums; color:var(--ink);
 }
-.tile .l{ color:var(--ink-3); font-size:10px; margin-top:5px;
+.tile .l{ color:var(--ink-3); font-size:10px; margin:0; text-align:right; line-height:1.4;
           letter-spacing:.13em; text-transform:uppercase; font-family:var(--mono); }
 
 /* ── 表格 ───────────────────────────────────────────── */

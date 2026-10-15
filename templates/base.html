@@ -9,13 +9,14 @@
 <body class="theme-{{ theme or 'dark' }}">
   <header>
     <span class="title"><span class="dot"></span>log‑ui</span>
+    {% set _p = request.url.path if request else '/' %}
     <nav>
-      <a href="/">总览</a>
-      <a href="/search">日志</a>
-      <a href="/servers">服务器</a>
-      <a href="/disks">磁盘</a>
-      <a href="/tail">实时</a>
-      <a href="/settings">设置</a>
+      <a href="/"{% if _p == '/' %} class="on"{% endif %}>总览</a>
+      <a href="/search"{% if _p.startswith('/search') %} class="on"{% endif %}>日志</a>
+      <a href="/servers"{% if _p.startswith('/servers') %} class="on"{% endif %}>服务器</a>
+      <a href="/disks"{% if _p.startswith('/disks') %} class="on"{% endif %}>磁盘</a>
+      <a href="/tail"{% if _p.startswith('/tail') %} class="on"{% endif %}>实时</a>
+      <a href="/settings"{% if _p.startswith('/settings') %} class="on"{% endif %}>设置</a>
     </nav>
     <span class="spacer"></span>
     {% if user %}
