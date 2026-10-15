@@ -63,21 +63,31 @@ def get_notify() -> dict:
     """钉钉通知配置。没配过时给默认值（指内网 DingTalkVPN）。"""
     c = _load()
     n = c.get("notify") or {}
+    ev = n.get("events") or {}
     return {
         "enabled": bool(n.get("enabled", False)),
         "url": (n.get("url") or "").strip(),
         "api_key": (n.get("api_key") or "").strip(),
         "phones": [str(p).strip() for p in (n.get("phones") or []) if str(p).strip()],
+        "daily_at": str(n.get("daily_at") or "10:00"),
+        "events": {
+            "disk_anomaly": bool(ev.get("disk_anomaly", True)),
+            "collector_down": bool(ev.get("collector_down", True)),
+            "daily_digest": bool(ev.get("daily_digest", True)),
+        },
     }
 
 
-def save_notify(enabled: bool, url: str, api_key: str, phones) -> None:
+def save_notify(enabled: bool, url: str, api_key: str, phones,
+                events: dict = None, daily_at: str = "10:00") -> None:
     c = _load()
     c["notify"] = {
         "enabled": bool(enabled),
         "url": (url or "").strip().rstrip("/"),
         "api_key": (api_key or "").strip(),
         "phones": list(phones or []),
+        "daily_at": (daily_at or "10:00").strip(),
+        "events": dict(events or {}),
     }
     _CFG_PATH.write_text(
         yaml.safe_dump(c, allow_unicode=True, sort_keys=False), encoding="utf-8"

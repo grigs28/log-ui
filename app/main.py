@@ -604,16 +604,21 @@ def settings_post(request: Request, refresh_sec: int = Form(10),
 @app.post("/settings/notify")
 def settings_notify(request: Request, enabled: str = Form(""),
                     url: str = Form(""), api_key: str = Form(""),
-                    phones: str = Form(""),
+                    phones: str = Form(""), daily_at: str = Form("10:00"),
+                    ev_disk: str = Form(""), ev_coll: str = Form(""),
+                    ev_daily: str = Form(""),
                     csrf_ok: None = Depends(csrf_protect)):
-    """保存钉钉通知配置。"""
+    """保存钉钉通知配置（含三个自动告警开关）。"""
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/settings", status_code=303)
     save_notify(enabled not in ("", "0", "false", "off"), url, api_key,
-                notify.clean_phones(phones))
+                notify.clean_phones(phones),
+                events={"disk_anomaly": bool(ev_disk), "collector_down": bool(ev_coll),
+                        "daily_digest": bool(ev_daily)},
+                daily_at=daily_at or "10:00")
     return RedirectResponse("/settings", status_code=303)
 
 

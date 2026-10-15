@@ -202,6 +202,13 @@ async def watchdog() -> None:
             badges = probe()
             _cache["badges"], _cache["ts"] = badges, time.time()
             heal(badges)
+            # 自动告警（磁盘新异常 / 采集器掉线 / 每日汇总）。
+            # 三个触发器都是边沿触发 + 去重，没开总开关就什么都不做。
+            try:
+                from . import alerts
+                alerts.tick(badges)
+            except Exception as e:
+                _log_heal(f"告警检查异常: {e}")
             # 清掉已经拔掉的盘（清空格子、保留盘位，不动其它盘）。
             # 放在这里而不是页面里，是为了不在 GET 里写文件；半小时判一次足够。
             if time.time() - last_prune > 1800:

@@ -111,6 +111,21 @@
         <input type="text" name="api_key" value="{{ notify.api_key }}" placeholder="sk-dingtalk-api-…" style="width:100%">
       </div>
     </div>
+    <label>自动告警（三个触发器都边沿触发 + 去重，不会重复刷屏；恢复也会报）</label>
+    <div class="row" style="margin-bottom:10px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;margin:0">
+        <input type="checkbox" name="ev_disk" value="1" {{ 'checked' if notify.events.disk_anomaly else '' }}>
+        磁盘新异常 <span class="meta">某块盘由好变坏时发一条</span></label>
+      <label style="display:flex;align-items:center;gap:6px;margin:0">
+        <input type="checkbox" name="ev_coll" value="1" {{ 'checked' if notify.events.collector_down else '' }}>
+        采集器掉线 <span class="meta">vector / cobian / victorialogs 断连时发</span></label>
+      <label style="display:flex;align-items:center;gap:6px;margin:0">
+        <input type="checkbox" name="ev_daily" value="1" {{ 'checked' if notify.events.daily_digest else '' }}>
+        每日汇总 <span class="meta">到点发一条概览（无异常也发）</span></label>
+      <span class="meta">每天</span>
+      <input type="text" name="daily_at" value="{{ notify.daily_at }}" style="width:70px" placeholder="10:00">
+    </div>
+
     <label>接收人手机号（每行一个，也可用逗号分隔；非 11 位的会被自动丢掉）</label>
     <textarea name="phones" rows="4" style="width:100%;background:var(--bg);color:var(--text);
               border:1px solid var(--border);border-radius:7px;padding:7px 10px;
