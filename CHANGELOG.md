@@ -2,6 +2,29 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.6.4] - 2026-10-15
+
+### Fixed
+- 「磁盘」tab：**横排下镜像盘又变回 1 格宽** —— v1.6.3 把类名 `bay-span` 拆成
+  `bay-hspan` / `bay-vspan`，但 CSS 里那条「撑满所占网格」的规则还指着旧类名：
+
+  ```css
+  .baymap .bay-span{ width:auto; }     /* 类名早就没了，规则成了死代码 */
+  ```
+
+  `.bay` 上有显式 `width`，网格项一旦有显式宽度就不再拉伸 ——
+  结果格子划了 2 列却只有 1 格宽、靠左放，看着还是一格。
+  改成 `.baymap .bay-hspan, .baymap .bay-vspan{ width:auto; }`
+
+  （这个坑 v1.1.1 踩过一次，是同一个原因：`grid-column:span 2` 生效了，
+  但元素自己有固定宽度。改名时漏改了规则。）
+
+### Added
+- `scripts/check.py`：功能标记检查**扩到 CSS** —— 改模板类名时 CSS 选择器很容易
+  没跟着改，语法和渲染都正常、只有肉眼看才知道不对。现在点名要求
+  `static/log-ui.css` 里存在 `.baymap .bay-hspan`（撑满占位）与 `grid-auto-rows`（竖排行高）。
+  反向验证：删掉那条规则即报「缺少功能标记: 镜像盘撑满占位」
+
 ## [1.6.3] - 2026-10-15
 
 ### Fixed
