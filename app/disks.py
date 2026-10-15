@@ -192,12 +192,14 @@ def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
 
 def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
              ip: str = "", rows=0) -> None:
-    """改视图：面板横竖 + 每排数量 + 盘向（竖装/横装）。
+    """改视图：面板横竖 + 每排数量 + 盘向（竖装/横装）+ 排数。
 
-    两个维度都可设，殊途同归到「槽位数」：
-      给了 rows → 槽位数 = 每排 × 排数（按矩形机箱来想）
-      没给 rows → 只改排布，槽位数不动（由 set_slot_count 单独声明）
-    空值一律表示「不改」。
+    **总槽位数是派生值，不是独立输入**：总槽位数 = 每排 × 排数，恒为整排矩形。
+    这样三个数字永远自洽，不会再出现「填了 24 却按 40 生效」那种两个输入框
+    各管一半、点错按钮就白改的情况。
+
+    已装盘的槽号仍受保护：排数不够放下它们时自动向上取整（总槽位数跟着变大），
+    宁可多给空槽位，也不把盘挤出面板。
     """
     d = load()
     s = _ensure(d, server, ip)
@@ -211,7 +213,13 @@ def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
         s["per_row"] = _clamp_per_row(per_row)
     save(d)
     if rows and int(rows) > 0:
-        set_slot_count(server, s["per_row"] * min(int(rows), 200), ip)
+        pr = s["per_row"]
+        n = min(max(int(rows), 1), 200)
+        need = max((int(x.get("slot", -1)) for x in s["disks"]
+                    if (x.get("dev") or "").strip()), default=-1) + 1
+        if pr * n < need:                 # 放不下已装的盘 → 排数补到够
+            n = -(-need // pr)
+        set_slot_count(server, pr * n, ip)
 
 
 def save_order(server: str, rows: list) -> int:
@@ -568,6 +576,8 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
         rows.append(extra)
     # 排数：只数有槽号的格子（日志发现的「未建档」行不算进机箱排数）
     layout_rows = (len(framed) + per_row - 1) // per_row if framed else 0
+    # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关
+    h_rows = (-(-len(framed) // h_per_row)) if framed else 0
     bad = sum(1 for x in disks if x["state"] == "err")
     unknown = sum(1 for x in disks if x["state"] == "warn")
     poll_errors = list((log_h or {}).get("poll_errors") or [])
@@ -586,7 +596,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
     return {"name": s["name"], "ip": (s.get("ip") or (log_h or {}).get("ip", "")),
             "mode": mode, "orient": orient, "cols": per_row, "h_per_row": h_per_row,
             "row_count": len(rows), "rows": rows, "disks": disks,
-            "slots": len(framed), "layout_rows": layout_rows,
+            "slots": len(framed), "layout_rows": layout_rows, "h_rows": h_rows,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
             # count = 面板格子数（含空槽），installed = 其中真装了盘的数量
             "count": len(disks),

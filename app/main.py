@@ -409,18 +409,10 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
     return RedirectResponse("/disks", status_code=303)
 
 
-@app.post("/disks/slots")
-def disks_slots(request: Request, server: str = Form(""), count: int = Form(0),
-                ip: str = Form(""),
-                csrf_ok: None = Depends(csrf_protect)):
-    """声明机箱槽位数（如 12 个槽位里只装 8 块盘，其余是空槽）。"""
-    user = _require_user(request)
-    if not user:
-        return RedirectResponse("/auth/login", status_code=302)
-    if not user.get("is_admin"):
-        return RedirectResponse("/disks", status_code=303)
-    disks.set_slot_count(server, count, ip)
-    return RedirectResponse("/disks", status_code=303)
+# 注：原 POST /disks/slots（独立设槽位数）已移除。
+# 总槽位数改为派生值 = 每排 × 排数，由 /disks/view 一并应用 ——
+# 曾出现「填了 24 却点成应用、按 4×10=40 写回」的误操作，两个入口收敛成一个。
+# 后端函数 set_slot_count() 保留，供 set_view 调用。
 
 
 @app.post("/disks/save")

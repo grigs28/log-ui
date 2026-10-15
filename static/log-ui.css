@@ -220,6 +220,9 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .baytools select,.baytools input[type=number]{ padding:3px 7px; font-size:12px; }
 .baytools input[type=number]{ width:64px; }
 .baytools button{ padding:3px 11px; font-size:12px; }
+/* 总槽位数：只读派生值，跟着每排/排数实时变 */
+.baytools .slot-count{ font-size:15px; font-weight:700; color:var(--accent);
+                       font-feature-settings:"tnum"; min-width:18px; text-align:center; }
 
 /* 拖动后的保存条 */
 .ordersave{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;

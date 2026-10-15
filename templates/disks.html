@@ -79,21 +79,15 @@
         <option value="h" {% if s.orient == 'h' %}selected{% endif %}>横装</option>
       </select>
       <span class="meta">每排</span>
-      <input type="number" name="per_row" value="{{ s.h_per_row }}" min="1" max="24" title="每排几个盘位">
+      <input type="number" name="per_row" value="{{ s.h_per_row }}" min="1" max="24"
+             title="每排几个盘位。改这个只改形状，总槽位数不变（排数会自动跟着重算）">
       <span class="meta">个 × 共</span>
-      <input type="number" name="rows" value="{{ s.layout_rows }}" min="1" max="200" title="共几排。每排 × 排数 = 槽位数">
-      <span class="meta">排 = <b>{{ s.h_per_row * s.layout_rows }}</b> 个槽位</span>
-      <button title="应用面板/盘向/每排/排数（每排 × 排数 = 槽位数）">应用</button>
-    </form>
-
-    <form method="post" action="/disks/slots" style="display:flex;align-items:center;gap:7px;margin:0;flex-wrap:wrap">
-      <input type="hidden" name="server" value="{{ s.name }}">
-      <input type="hidden" name="ip" value="{{ s.ip }}">
-      <span class="meta">或直接定槽位数</span>
-      <input type="number" name="count" value="{{ s.slots or 12 }}" min="1" max="200"
-             title="机箱实际槽位数。如 12 个槽位只装 8 块盘，其余 4 个显示为空槽；多余的空槽会被删除，已装盘的槽号不动">
-      <button class="btn-muted" style="padding:3px 11px;font-size:12px"
-              title="按槽位数排布面板：不足的补空槽，多余的空槽删除（已装盘的槽号一律保留）">设置</button>
+      <input type="number" name="rows" value="{{ s.h_rows or 3 }}" min="1" max="200"
+             title="共几排。改这个才改总槽位数（= 每排 × 排数）">
+      <span class="meta">排 = 总槽位数</span>
+      <b class="slot-count" data-per-row="{{ s.h_per_row }}" data-rows="{{ s.h_rows or 3 }}">{{ s.h_per_row * (s.h_rows or 3) }}</b>
+      <span class="meta">个（只读，由每排 × 排数决定）</span>
+      <button title="应用面板/盘向。总槽位数 = 每排 × 排数，已装盘的槽号不会被挤掉">应用</button>
     </form>
 
     <span class="meta">· 直接<b>拖动盘位</b>可改显示位置（保存后槽号按新顺序重排）</span>
@@ -197,6 +191,33 @@
 <script>
 /* 拖动盘位改显示位置。落地后由「保存顺序」POST 给 /disks/order，
    槽号按新的视觉顺序重排。空格子（.bay-vacant）只是补位，不参与拖动。 */
+/* ---- 每排 / 排数 / 总槽位数 三者的联动 ----
+   总槽位数是只读派生值。两个输入框分工不同，避免「改了一个却被另一个覆盖」：
+     改「每排」→ 保持总槽位数不变，排数自动重算（只改形状）
+     改「排数」→ 总槽位数跟着变（这才是在改机箱大小）           */
+(function () {
+  Array.prototype.forEach.call(document.querySelectorAll('.baytools form'), function (f) {
+    var per = f.querySelector('input[name="per_row"]');
+    var row = f.querySelector('input[name="rows"]');
+    var out = f.querySelector('.slot-count');
+    if (!per || !row || !out) return;
+
+    function total() { return (+per.value || 1) * (+row.value || 1); }
+    function paint() { out.textContent = total(); }
+
+    per.addEventListener('input', function () {
+      // 形状变了、机箱没变：排数倒推回同一个总槽位数
+      var want = out.dataset.rows * out.dataset.perRow;   // 页面载入时的总槽位数
+      if (want > 0 && +per.value > 0) {
+        row.value = Math.max(1, Math.ceil(want / (+per.value || 1)));
+      }
+      paint();
+    });
+    row.addEventListener('input', paint);
+    paint();
+  });
+})();
+
 (function () {
   var dirty = {};      // server -> true
 
