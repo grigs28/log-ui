@@ -160,6 +160,15 @@ details summary:hover{ color:var(--text); }
 hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 ::selection{ background:color-mix(in srgb,var(--accent) 30%,transparent); }
 
+/* 提交后回跳的目标卡片：闪一下，并留出 sticky header 的高度，
+   否则 scrollIntoView 会把卡片顶部压在页头底下 */
+.card[id^="srv-"]{ scroll-margin-top:66px; }
+@keyframes cardFocus {
+  0%   { box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow:0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.card-focus{ border-color:var(--accent); animation:cardFocus 1.2s ease-out 2; }
+
 /* 磁盘盘位图（面板式）
    --per-row  每排格数（竖排=1）
    --bay-w    盘位**固定**宽度：改每排数量时格子不再被拉伸/压缩，只改变排布

@@ -31,7 +31,7 @@
 {% endif %}
 
 {% for s in servers %}
-<div class="card" style="margin-bottom:14px">
+<div class="card" id="srv-{{ s.name }}" style="margin-bottom:14px">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
     <b>{{ s.name }}</b>
     <span class="sbadge sbadge-{{ s.state }}"
@@ -61,6 +61,7 @@
     {% if s.unfiled %}
     <form method="post" action="/disks/archive" style="display:inline;margin:0">
       <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="back" value="{{ s.name }}">
       <button class="btn" style="padding:2px 8px"
               title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档：先填空槽位，填满后顺延槽号（事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
     </form>
@@ -81,6 +82,7 @@
     <form method="post" action="/disks/view" style="display:flex;align-items:center;gap:7px;margin:0;flex-wrap:wrap">
       <input type="hidden" name="server" value="{{ s.name }}">
       <input type="hidden" name="ip" value="{{ s.ip }}">
+      <input type="hidden" name="back" value="{{ s.name }}">
       <span class="meta">面板</span>
       <select name="mode" title="竖排 = 一列到底；横排 = 多列铺开">
         <option value="h" {% if s.mode == 'h' %}selected{% endif %}>横排</option>
@@ -153,6 +155,7 @@
     <summary class="meta">编辑盘位（{{ s.count }} 条）</summary>
     <form method="post" action="/disks/save" style="margin-top:8px">
       <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="back" value="{{ s.name }}">
       <div class="logpane">
         <table>
           <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:85px">容量</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
@@ -207,6 +210,24 @@
 
 {% block scripts %}
 <script>
+/* 提交后回到原来那张卡片。
+   页面上有 20 台服务器，点一次「应用」就滚回顶部的话得重新找，
+   所以服务端跳转带 ?focus=<服务器名>，这里滚过去并闪一下。
+   用 replaceState 把参数抹掉，免得刷新时又跳一次。 */
+(function () {
+  var p = new URLSearchParams(location.search);
+  var name = p.get('focus');
+  if (!name) return;
+  var el = document.getElementById('srv-' + name);
+  if (!el) return;
+  el.scrollIntoView({ block: 'start' });
+  el.classList.add('card-focus');
+  setTimeout(function () { el.classList.remove('card-focus'); }, 2400);
+  p.delete('focus');
+  var qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+})();
+
 /* 拖动盘位改显示位置。落地后由「保存顺序」POST 给 /disks/order，
    槽号按新的视觉顺序重排。空格子（.bay-vacant）只是补位，不参与拖动。 */
 /* ---- 每排 / 排数 / 总槽位数 三者的联动 ----
@@ -319,6 +340,7 @@
       }
       add('server', server);
       add('ip', map.dataset.ip || '');
+      add('back', server);
       Array.prototype.forEach.call(map.querySelectorAll('.bay-live'), function (b) {
         add('dev', b.dataset.dev || '');
         add('osd', b.dataset.osd || '');

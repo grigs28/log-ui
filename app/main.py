@@ -328,6 +328,17 @@ def servers_unignore(request: Request, name: str = Form(""),
 
 
 # ---------------- 磁盘盘位图 ----------------
+
+def _disks_back(back: str) -> str:
+    """操作完回到原来那张卡片，而不是跳回页面顶部。
+
+    页面上有 20 张服务器卡片，点一次「应用」就滚回顶部、得重新找，
+    所以跳转带 ?focus=<服务器名>，由页面脚本滚回去并高亮一下。
+    """
+    b = (back or "").strip()
+    return f"/disks?focus={quote(b)}" if b else "/disks"
+
+
 @app.get("/disks")
 def disks_page(request: Request):
     user = _require_user(request)
@@ -351,7 +362,7 @@ def disks_server_add(request: Request, name: str = Form(""), ip: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
     disks.upsert_server(name, ip, per_row or None)
-    return RedirectResponse("/disks", status_code=303)
+    return RedirectResponse(_disks_back(name), status_code=303)   # 新增完滚到新卡片
 
 
 @app.post("/disks/server/delete")
@@ -367,7 +378,7 @@ def disks_server_delete(request: Request, name: str = Form(""),
 
 
 @app.post("/disks/archive")
-def disks_archive(request: Request, server: str = Form(""),
+def disks_archive(request: Request, server: str = Form(""), back: str = Form(""),
                   csrf_ok: None = Depends(csrf_protect)):
     """把日志发现的盘落进档案（槽号顺延，事后可改）。"""
     user = _require_user(request)
@@ -376,7 +387,7 @@ def disks_archive(request: Request, server: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
     disks.archive_unfiled(server)
-    return RedirectResponse("/disks", status_code=303)
+    return RedirectResponse(_disks_back(back), status_code=303)
 
 
 @app.post("/disks/view")
@@ -391,13 +402,13 @@ def disks_view(request: Request, server: str = Form(""), mode: str = Form(""),
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
     disks.set_view(server, mode, per_row, orient, ip, rows)
-    return RedirectResponse("/disks", status_code=303)
+    return RedirectResponse(_disks_back(back), status_code=303)
 
 
 @app.post("/disks/order")
 def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form([]),
                 osd: list[str] = Form([]), note: list[str] = Form([]),
-                size: list[str] = Form([]), ip: str = Form(""),
+                size: list[str] = Form([]), ip: str = Form(""), back: str = Form(""),
                 csrf_ok: None = Depends(csrf_protect)):
     """拖动改面板显示位置 → 槽号按新顺序重排。"""
     user = _require_user(request)
@@ -406,7 +417,7 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
     disks.save_order(server, list(zip(dev, osd, note, size)), ip)
-    return RedirectResponse("/disks", status_code=303)
+    return RedirectResponse(_disks_back(back), status_code=303)
 
 
 # 注：原 POST /disks/slots（独立设槽位数）已移除。
@@ -419,7 +430,7 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
 def disks_save(request: Request, server: str = Form(""), per_row: int = Form(0),
                slot: list[str] = Form([]), dev: list[str] = Form([]),
                osd: list[str] = Form([]), note: list[str] = Form([]),
-               size: list[str] = Form([]),
+               size: list[str] = Form([]), back: str = Form(""),
                csrf_ok: None = Depends(csrf_protect)):
     user = _require_user(request)
     if not user:
@@ -427,7 +438,7 @@ def disks_save(request: Request, server: str = Form(""), per_row: int = Form(0),
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
     disks.save_table(server, per_row, list(zip(slot, dev, osd, note, size)))
-    return RedirectResponse("/disks", status_code=303)
+    return RedirectResponse(_disks_back(back), status_code=303)
 
 
 # ---------------- 实时 tail (WebSocket) ----------------
