@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.6.1] - 2026-10-15
+
+### Fixed
+- 「磁盘」tab：**拖动时鼠标划过一串格子会连锁换位** —— 原来 `dragover` 每经过一格
+  就交换一次，扫过 sdb、sdc 再落到 sda 上，中间那些也都被换了位置，
+  结果不可预期。
+  现在 **`dragover` 只高亮落点、不搬动任何东西**，**松手（`drop`）时才交换一次** ——
+  拖 sdc 到 sda 就是这两个互换，其余一个都不动。
+
+  落点用 3px 蓝色描边标出（`.drop-target`），拖动的格子保持虚线描边（`.dragging`）
+
 ## [1.6.0] - 2026-10-15
 
 ### Added

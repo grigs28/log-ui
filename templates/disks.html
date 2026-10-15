@@ -549,6 +549,12 @@
 
   Array.prototype.forEach.call(document.querySelectorAll('.baymap'), function (map) {
     var server = map.dataset.server;
+    var hover = null;                 // 当前悬停的目标格子
+
+    function clearHover() {
+      if (hover) hover.classList.remove('drop-target');
+      hover = null;
+    }
 
     map.addEventListener('dragstart', function (e) {
       var bay = e.target.closest && e.target.closest('.bay-live');
@@ -561,6 +567,7 @@
     map.addEventListener('dragend', function () {
       var bay = map.querySelector('.bay-live.dragging');
       if (bay) bay.classList.remove('dragging');
+      clearHover();
       // 补位空格子统一挪到末尾，重排后最后一行依旧补齐
       Array.prototype.forEach.call(map.querySelectorAll('.bay-vacant'), function (v) {
         map.appendChild(v);
@@ -568,19 +575,32 @@
       renumber(map);
     });
 
+    /* 拖动中**只高亮**不搬动 —— 划过一格就交换的话，鼠标扫过一串格子会连锁换位，
+       结果不可预期。落点由松手那一下决定。 */
     map.addEventListener('dragover', function (e) {
       var drag = map.querySelector('.bay-live.dragging');
       if (!drag) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       var over = e.target.closest && e.target.closest('.bay-live');
-      if (!over || over === drag || over.parentNode !== map) return;
-      swap(drag, over);
-      renumber(map);                 // 号跟着位置走，所见即所得
-      markDirty(server);
+      if (!over || over === drag || over.parentNode !== map) {
+        clearHover();
+        return;
+      }
+      if (over !== hover) { clearHover(); hover = over; over.classList.add('drop-target'); }
     });
 
-    map.addEventListener('drop', function (e) { e.preventDefault(); });
+    /* 松手：**只交换拖动的这一格和落点这一格**，其余不动。 */
+    map.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var drag = map.querySelector('.bay-live.dragging');
+      if (drag && hover && hover !== drag && hover.parentNode === map) {
+        swap(drag, hover);
+      }
+      clearHover();
+      renumber(map);                 // 号跟着位置走（镜像盘占 2 位，按 span 累加）
+      markDirty(server);
+    });
   });
 
   /* 保存条按钮 */

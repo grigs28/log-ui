@@ -264,6 +264,8 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .bay-live{ cursor:grab; user-select:none; -webkit-user-select:none; transition:outline-color .12s,opacity .12s; }
 .bay-live:hover{ border-color:var(--accent); }
 .bay-live.dragging{ opacity:.45; cursor:grabbing; outline:2px dashed var(--accent); outline-offset:1px; }
+/* 落点高亮：拖动中只提示会跟谁换，不预先把格子搬来搬去 */
+.bay-live.drop-target{ outline:3px solid var(--accent); outline-offset:1px; }
 .bay-slot{ font-size:16px; font-weight:700; color:var(--text2); line-height:1.05; }
 .bay-dev{ font-size:11px; color:var(--text); letter-spacing:.2px; }
 .bay-meta{ font-size:10px; color:var(--muted); max-width:100%;
