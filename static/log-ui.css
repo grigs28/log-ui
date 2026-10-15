@@ -160,12 +160,20 @@ details summary:hover{ color:var(--text); }
 hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 ::selection{ background:color-mix(in srgb,var(--accent) 30%,transparent); }
 
-/* 磁盘盘位图（面板式）：--per-row 控制每排格数（1 = 竖着一列） */
-.baymap{ display:grid; grid-template-columns:repeat(var(--per-row,4), minmax(0,1fr));
-         gap:6px; margin-top:8px; }
-.bay{ position:relative; border:1px solid var(--border-light); border-radius:6px;
-      background:var(--surface2); padding:6px 4px; text-align:center; min-height:64px;
-      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; }
+/* 磁盘盘位图（面板式）
+   --per-row  每排格数（竖排=1）
+   --bay-w    盘位**固定**宽度：改每排数量时格子不再被拉伸/压缩，只改变排布
+   --bay-h    盘位固定高度：要装下 槽号/设备/OSD/状态徽章 四行，80px 是下限 */
+.baymap{ display:grid; grid-template-columns:repeat(var(--per-row,4), var(--bay-w,106px));
+         gap:6px; margin-top:8px; justify-content:start; overflow-x:auto; padding-bottom:2px; }
+.bay{ position:relative; width:var(--bay-w,106px); height:var(--bay-h,80px);
+      border:1px solid var(--border-light); border-radius:6px;
+      background:var(--surface2); padding:4px 3px; text-align:center;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+      overflow:hidden; }
+.bay-live{ cursor:grab; user-select:none; -webkit-user-select:none; transition:outline-color .12s,opacity .12s; }
+.bay-live:hover{ border-color:var(--accent); }
+.bay-live.dragging{ opacity:.45; cursor:grabbing; outline:2px dashed var(--accent); outline-offset:1px; }
 .bay-slot{ font-size:16px; font-weight:700; color:var(--text2); line-height:1.05; }
 .bay-dev{ font-size:11px; color:var(--text); letter-spacing:.2px; }
 .bay-meta{ font-size:10px; color:var(--muted); max-width:100%;
@@ -176,7 +184,23 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .bay-err{ border-color:var(--error); background:rgba(248,113,113,.12); }
 .bay-err .bay-slot{ color:var(--error); }
 .bay-none{ border-style:dashed; opacity:.55; }
-.bay-vacant{ border:1px dashed var(--border); background:transparent; min-height:64px; }
+.bay-vacant{ border:1px dashed var(--border); background:transparent; }
+
+/* 视图工具条（横竖开关 / 每排数量） */
+.baytools{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+           margin:8px 0 2px; padding-bottom:6px; border-bottom:1px dashed var(--border); }
+.baytools select,.baytools input[type=number]{ padding:3px 7px; font-size:12px; }
+.baytools input[type=number]{ width:64px; }
+.baytools button{ padding:3px 11px; font-size:12px; }
+
+/* 拖动后的保存条 */
+.ordersave{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px;
+            font-size:12px; color:var(--warning);
+            background:color-mix(in srgb,var(--warning) 10%,transparent);
+            border:1px solid color-mix(in srgb,var(--warning) 35%,transparent);
+            border-radius:7px; padding:5px 10px; }
+.ordersave[hidden]{ display:none; }
+.ordersave button{ padding:3px 11px; font-size:12px; }
 
 /* 状态徽章（绿=日志确认健康 / 黄=未知未验证 / 红=异常）：悬停看详情 */
 .sbadge{ display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600;

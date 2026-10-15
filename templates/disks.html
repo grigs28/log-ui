@@ -38,7 +38,7 @@
           title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;共 {{ s.count }} 盘 · 异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
     <span class="meta">{{ s.ip or '无 IP' }}</span>
-    <span class="meta">{{ s.count }} 盘</span>
+    <span class="meta">已装 {{ s.installed }}{% if s.count != s.installed %} / 共 {{ s.count }} 槽{% else %} 盘{% endif %}</span>
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     <span style="flex:1"></span>
     {% if is_admin %}
@@ -46,14 +46,9 @@
     <form method="post" action="/disks/archive" style="display:inline;margin:0">
       <input type="hidden" name="server" value="{{ s.name }}">
       <button class="btn" style="padding:2px 8px"
-              title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档（槽号顺延，事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
+              title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档：先填空槽位，填满后顺延槽号（事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
     </form>
     {% endif %}
-    <form method="post" action="/disks/fill" style="display:inline;margin:0">
-      <input type="hidden" name="server" value="{{ s.name }}">
-      <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200" style="width:70px" title="补齐 0..N-1 槽位">
-      <button class="btn btn-muted" style="padding:2px 8px" title="按数量补齐空槽位（已有槽位保留）">补槽位</button>
-    </form>
     {% if not s.auto %}
     <form method="post" action="/disks/server/delete" style="display:inline;margin:0"
           onsubmit="return confirm('删除 {{ s.name }} 的盘位档案？（日志仍会显示为「日志发现」）')">
@@ -64,12 +59,42 @@
     {% endif %}
   </div>
 
+  {# ---------- 视图工具条 ---------- #}
+  {% if is_admin %}
+  <div class="baytools">
+    <form method="post" action="/disks/view" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <span class="meta">视图</span>
+      <select name="mode" title="竖排 = 一列到底；横排 = 多列铺开">
+        <option value="h" {% if s.mode == 'h' %}selected{% endif %}>横排</option>
+        <option value="v" {% if s.mode == 'v' %}selected{% endif %}>竖排</option>
+      </select>
+      <span class="meta">每排</span>
+      <input type="number" name="per_row" value="{{ s.h_per_row }}" min="1" max="24" title="横排时每排的盘位数">
+      <span class="meta">盘 → 共 {{ s.row_count }} 排</span>
+      <button title="应用视图设置">应用</button>
+    </form>
+
+    <form method="post" action="/disks/slots" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <span class="meta">槽位数</span>
+      <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200"
+             title="机箱实际槽位数。如 12 个槽位只装 8 块盘，其余 4 个显示为空槽；多余的空槽会被删除，已装盘的槽号不动">
+      <button class="btn-muted" style="padding:3px 11px;font-size:12px"
+              title="按槽位数排布面板：不足的补空槽，多余的空槽删除（已装盘的槽号一律保留）">设置</button>
+    </form>
+
+    <span class="meta">· 直接<b>拖动盘位</b>可改显示位置（保存后槽号按新顺序重排）</span>
+  </div>
+  {% endif %}
+
   {# ---------- 面板 ---------- #}
-  <div class="baymap" style="--per-row:{{ s.per_row }}">
+  <div class="baymap mode-{{ s.mode }}" data-server="{{ s.name }}" style="--per-row:{{ s.cols }}">
     {% for row in s.rows %}
       {% for d in row %}
-      <div class="bay bay-{{ d.state }}"
-           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.attr %} · {{ d.attr }}{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issue %}{{ d.issue }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}">
+      <div class="bay bay-{{ d.state }} bay-live" draggable="true"
+           data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}"
+           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.attr %} · {{ d.attr }}{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issue %}{{ d.issue }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}&#10;（拖动可调整位置）">
         <div class="bay-slot">{{ d.slot if d.slot is not none else '—' }}</div>
         <div class="bay-dev">{{ d.dev.replace('/dev/','') if d.dev else '' }}</div>
         <div class="bay-meta">
@@ -82,10 +107,20 @@
         {% endif %}
       </div>
       {% endfor %}
-      {% for _ in range(s.per_row - row|length) %}<div class="bay bay-vacant"></div>{% endfor %}
+      {% for _ in range(s.cols - row|length) %}<div class="bay bay-vacant"></div>{% endfor %}
     {% endfor %}
-    {% if not s.rows %}<div class="meta">尚无盘位——先在下方「编辑盘位」录盘，或用「补槽位」建空格子</div>{% endif %}
+    {% if not s.rows %}<div class="meta">尚无盘位——用上方「槽位数」建格子，或在下方「编辑盘位」逐条录盘</div>{% endif %}
   </div>
+
+  {# ---------- 拖动后的保存条（默认隐藏） ---------- #}
+  {% if is_admin %}
+  <div class="ordersave" data-server="{{ s.name }}" hidden>
+    <span>盘位顺序已改动</span>
+    <button type="button" data-act="save">保存顺序</button>
+    <button type="button" class="btn-muted" data-act="reset">放弃</button>
+    <span class="meta">保存后槽号按新顺序重排为 0‥N-1；日志发现的盘会一并落档</span>
+  </div>
+  {% endif %}
 
   {# ---------- 编辑 ---------- #}
   {% if is_admin %}
@@ -93,10 +128,6 @@
     <summary class="meta">编辑盘位（{{ s.count }} 条）</summary>
     <form method="post" action="/disks/save" style="margin-top:8px">
       <input type="hidden" name="server" value="{{ s.name }}">
-      <div style="margin-bottom:8px">
-        <label>每排数量（决定面板排布：1 = 竖着一列；盘数/2 = 横着两排）</label>
-        <input type="number" name="per_row" value="{{ s.per_row }}" min="1" max="24" style="width:80px">
-      </div>
       <div class="logpane">
         <table>
           <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
@@ -144,4 +175,104 @@
   </details>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* 拖动盘位改显示位置。落地后由「保存顺序」POST 给 /disks/order，
+   槽号按新的视觉顺序重排。空格子（.bay-vacant）只是补位，不参与拖动。 */
+(function () {
+  var dirty = {};      // server -> true
+
+  function saveBar(server) {
+    return document.querySelector('.ordersave[data-server="' + server + '"]');
+  }
+
+  function markDirty(server) {
+    if (dirty[server]) return;
+    dirty[server] = true;
+    var bar = saveBar(server);
+    if (bar) bar.hidden = false;
+  }
+
+  function resetDirty(server) {
+    dirty[server] = false;
+    var bar = saveBar(server);
+    if (bar) bar.hidden = true;
+  }
+
+  /* 交换两个元素在 DOM 中的位置（占位符法，相邻/不相邻都正确） */
+  function swap(a, b) {
+    var pa = a.parentNode, pb = b.parentNode;
+    var mark = document.createComment('');
+    pa.insertBefore(mark, a);
+    pb.insertBefore(a, b);
+    pa.insertBefore(b, mark);
+    pa.removeChild(mark);
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.baymap'), function (map) {
+    var server = map.dataset.server;
+
+    map.addEventListener('dragstart', function (e) {
+      var bay = e.target.closest && e.target.closest('.bay-live');
+      if (!bay) { e.preventDefault(); return; }
+      bay.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', bay.dataset.dev || ''); } catch (_) {}
+    });
+
+    map.addEventListener('dragend', function () {
+      var bay = map.querySelector('.bay-live.dragging');
+      if (bay) bay.classList.remove('dragging');
+      // 补位空格子统一挪到末尾，重排后最后一行依旧补齐
+      Array.prototype.forEach.call(map.querySelectorAll('.bay-vacant'), function (v) {
+        map.appendChild(v);
+      });
+    });
+
+    map.addEventListener('dragover', function (e) {
+      var drag = map.querySelector('.bay-live.dragging');
+      if (!drag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var over = e.target.closest && e.target.closest('.bay-live');
+      if (!over || over === drag || over.parentNode !== map) return;
+      swap(drag, over);
+      markDirty(server);
+    });
+
+    map.addEventListener('drop', function (e) { e.preventDefault(); });
+  });
+
+  /* 保存条按钮 */
+  Array.prototype.forEach.call(document.querySelectorAll('.ordersave'), function (bar) {
+    var server = bar.dataset.server;
+    bar.addEventListener('click', function (e) {
+      var act = e.target.dataset && e.target.dataset.act;
+      if (!act) return;
+      if (act === 'reset') { location.reload(); return; }
+      var map = document.querySelector('.baymap[data-server="' + server + '"]');
+      if (!map) return;
+      var f = document.createElement('form');
+      f.method = 'post';
+      f.action = '/disks/order';
+      function add(name, val) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = name; i.value = val;
+        f.appendChild(i);
+      }
+      add('server', server);
+      Array.prototype.forEach.call(map.querySelectorAll('.bay-live'), function (b) {
+        add('dev', b.dataset.dev || '');
+        add('osd', b.dataset.osd || '');
+        add('note', b.dataset.note || '');
+      });
+      document.body.appendChild(f);
+      resetDirty(server);
+      f.submit();
+    });
+  });
+})();
+</script>
 {% endblock %}

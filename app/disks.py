@@ -64,6 +64,7 @@ _LOGS_TTL = 120       # 日志解析缓存 2 分钟
 
 def _blank():
     return {"settings": {"default_per_row": DEFAULT_PER_ROW,
+                         "default_mode": "h",     # h=横排(多列) | v=竖排(一列)
                          "cell_label": "slot"},   # slot | dev
             "servers": []}
 
@@ -95,6 +96,11 @@ def _clamp_per_row(v) -> int:
     return min(max(n, lo), hi)
 
 
+def _clamp_mode(v) -> str:
+    v = (v or "").strip().lower()
+    return v if v in ("h", "v") else "h"
+
+
 def get_server(d: dict, name: str):
     for s in d["servers"]:
         if s.get("name") == name:
@@ -110,6 +116,7 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
     s = get_server(d, name)
     if s is None:
         s = {"name": name, "ip": (ip or "").strip(),
+             "mode": _clamp_mode(d["settings"].get("default_mode")),
              "per_row": _clamp_per_row(per_row or d["settings"]["default_per_row"]),
              "disks": []}
         d["servers"].append(s)
@@ -121,6 +128,41 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
         s.setdefault("disks", [])
     save(d)
     return d
+
+
+def set_view(server: str, mode: str = "", per_row=0) -> None:
+    """改视图：横/竖 + 横排每排数量。per_row<=0 表示不改。"""
+    d = load()
+    s = get_server(d, (server or "").strip())
+    if s is None:
+        return
+    if mode:
+        s["mode"] = _clamp_mode(mode)
+    if per_row and int(per_row) > 0:
+        s["per_row"] = _clamp_per_row(per_row)
+    save(d)
+
+
+def save_order(server: str, rows: list) -> int:
+    """按面板显示顺序重排盘位：槽号 = 视觉顺序号（0..N-1）。
+
+    面板顺序即档案顺序，故整表替换。拖动进来的「日志发现」盘会一并落档。
+    返回写入的盘位数。
+    """
+    d = load()
+    s = get_server(d, (server or "").strip())
+    if s is None or not rows:
+        return 0
+    out = []
+    for i, item in enumerate(rows):
+        dev, osd, note = (list(item) + ["", "", ""])[:3]
+        out.append({"slot": i,
+                    "dev": (dev or "").strip(),
+                    "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
+                    "note": (note or "").strip()})
+    s["disks"] = out
+    save(d)
+    return len(out)
 
 
 def remove_server(name: str) -> None:
@@ -169,7 +211,7 @@ def save_table(server: str, per_row, rows: list) -> None:
     s = get_server(d, (server or "").strip())
     if s is None:
         return
-    if per_row is not None:
+    if per_row and int(per_row) > 0:      # 视图已由工具条单独管，这里留空即不动
         s["per_row"] = _clamp_per_row(per_row)
     out, seen = [], set()
     for slot, dev, osd, note in rows:
@@ -190,8 +232,10 @@ def save_table(server: str, per_row, rows: list) -> None:
 def archive_unfiled(name: str) -> int:
     """把日志里发现、档案里没有的盘落档。返回新增条数。
 
-    槽号从当前最大槽号往后顺延（日志不带槽位信息，先给出顺序位，事后可在
-    编辑盘位里改成真实槽号）。服务器本身没建档的，一并建。
+    优先**填进已声明的空槽位**（槽位数设了 12、只装 8 块时，剩下的 4 个空位
+    正好收下日志发现的盘）；空位填满后才往后顺延新槽号。日志不带槽位信息，
+    顺延出来的只是顺序位，事后可在「编辑盘位」改成真实槽号。
+    服务器本身没建档的，一并建。
     """
     name = (name or "").strip()
     if not name:
@@ -203,17 +247,26 @@ def archive_unfiled(name: str) -> int:
     s = get_server(d, name)
     if s is None:
         s = {"name": name, "ip": (poll_logs()["by_host"].get(name) or {}).get("ip", ""),
+             "mode": _clamp_mode(d["settings"].get("default_mode")),
              "per_row": d["settings"]["default_per_row"], "disks": []}
         d["servers"].append(s)
     have = {x.get("dev") for x in s["disks"] if x.get("dev")}
+    # 空槽位（有槽号、没装盘）按槽号顺序待填
+    empties = sorted((x for x in s["disks"] if not (x.get("dev") or "").strip()),
+                     key=lambda x: int(x.get("slot", 0)))
     nxt = max([int(x.get("slot", -1)) for x in s["disks"]] or [-1]) + 1
     added = 0
     for dev, ent in sorted(log_disks.items()):
         if dev in have:
             continue
-        s["disks"].append({"slot": nxt, "dev": dev,
-                           "osd": ent.get("osd", ""), "note": ""})
-        nxt += 1
+        if empties:
+            row = empties.pop(0)          # 先填空槽位，保留槽号与备注
+        else:
+            row = {"slot": nxt, "dev": "", "osd": "", "note": ""}
+            s["disks"].append(row)
+            nxt += 1
+        row["dev"] = dev
+        row["osd"] = ent.get("osd", "")
         added += 1
     if added:
         s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
@@ -221,24 +274,36 @@ def archive_unfiled(name: str) -> int:
     return added
 
 
-def fill_slots(server: str, count) -> None:
-    """按数量补齐 0..count-1 的槽位（已有槽位保留，不覆盖）。"""
+def set_slot_count(server: str, count) -> int:
+    """声明机箱槽位数：面板显示 0..count-1 共 count 个格子，装了几块就几块亮。
+
+    未占用的格子是空槽（可被「建档」或拖动填充）；多出来的空格子直接删掉。
+    **已装盘的槽号一律不动**——若最高已装槽位 ≥ count，count 会被顶到它 +1，
+    避免设置值小于实际装盘数时把盘挤出面板。返回最终生效的槽位数。
+    """
     d = load()
     s = get_server(d, (server or "").strip())
     if s is None:
-        return
+        return 0
     try:
-        count = int(count)
+        n = int(count)
     except (TypeError, ValueError):
-        return
-    if count < 1 or count > 200:
-        return
+        return 0
+    if n < 1 or n > 200:
+        return 0
+    occupied = [int(x.get("slot", -1)) for x in s["disks"] if (x.get("dev") or "").strip()]
+    if occupied:
+        n = max(n, max(occupied) + 1)
+    # 超出 n 的空槽删掉（有盘的一律保留）
+    s["disks"] = [x for x in s["disks"]
+                  if (x.get("dev") or "").strip() or int(x.get("slot", -1)) < n]
     have = {int(x.get("slot", -1)) for x in s["disks"]}
-    for i in range(count):
+    for i in range(n):
         if i not in have:
             s["disks"].append({"slot": i, "dev": "", "osd": "", "note": ""})
     s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
     save(d)
+    return n
 
 
 # ---------------- 服务器清单（NAS hosts 文件） ----------------
@@ -337,6 +402,7 @@ def merged(include_hosts: bool = True) -> dict:
         if name in seen:
             continue
         servers.append(_assemble({"name": name, "ip": h.get("ip", ""),
+                                  "mode": d["settings"].get("default_mode"),
                                   "per_row": d["settings"]["default_per_row"],
                                   "disks": []}, h, auto=True))
     # hosts 文件里未建档的：占位（有 IP 无盘位）
@@ -346,6 +412,7 @@ def merged(include_hosts: bool = True) -> dict:
                 continue
             servers.append(_assemble(
                 {"name": row["name"], "ip": row["ip"],
+                 "mode": d["settings"].get("default_mode"),
                  "per_row": d["settings"]["default_per_row"],
                  "disks": [], "unbuilt": True}, None, auto=True))
     servers.sort(key=lambda x: x["name"])
@@ -373,7 +440,9 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
 
 def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
     """把一台服务器的布局与日志合并成渲染行。"""
-    per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
+    mode = _clamp_mode(s.get("mode"))
+    h_per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
+    per_row = 1 if mode == "v" else h_per_row   # 竖排：一列；横排：多列
     log_disks = (log_h or {}).get("disks", {}) or {}
     disks = []
     used_devs = set()
@@ -423,9 +492,13 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
     else:
         st, label = ("ok", "全部健康") if disks else ("none", "")
     return {"name": s["name"], "ip": (s.get("ip") or (log_h or {}).get("ip", "")),
-            "per_row": per_row, "rows": rows, "disks": disks,
+            "mode": mode, "cols": per_row, "h_per_row": h_per_row,
+            "row_count": len(rows), "rows": rows, "disks": disks,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
-            "count": len(disks), "bad": bad, "unknown": unknown,
+            # count = 面板格子数（含空槽），installed = 其中真装了盘的数量
+            "count": len(disks),
+            "installed": sum(1 for x in disks if x["dev"]),
+            "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
             "unfiled": sum(1 for x in disks if x.get("unfiled")),
             "state": st, "label": label}
