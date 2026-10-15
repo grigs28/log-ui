@@ -96,6 +96,7 @@ FEATURE_MARKERS = {
         ("每排/排数联动", "slot-count"),
         ("单盘动作按钮", "bay-act"),
         ("整机重测按钮", "check-host"),
+        ("镜像盘跨格", "bay-vspan"),
         ("动作输出弹窗", "actmodal"),
         ("进度条", "actbar-fill"),
         ("物理盘位属性", "data-dev"),

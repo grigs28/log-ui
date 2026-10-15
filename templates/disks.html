@@ -136,8 +136,9 @@
   <div class="baymap mode-{{ s.mode }} orient-{{ s.orient }}" data-server="{{ s.name }}" data-ip="{{ s.ip }}" style="--per-row:{{ s.cols }}">
     {% for row in s.rows %}
       {% for d in row.cells %}
-      <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}{% if d.span > 1 %} bay-span{% endif %}" draggable="true"
-           {% if d.place > 1 %}style="grid-column:span {{ d.place }}"{% endif %}
+      {# 镜像盘：横排时横向跨列，竖排时（只有 1 列）竖向跨行 —— 两种都要真占 2 格 #}
+      <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}{% if d.span > 1 %}{% if s.mode == 'v' %} bay-vspan{% else %} bay-hspan{% endif %}{% endif %}" draggable="true"
+           {% if d.span > 1 %}{% if s.mode == 'v' %}style="grid-row:span {{ d.span }}"{% elif d.place > 1 %}style="grid-column:span {{ d.place }}"{% endif %}{% endif %}
            data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
            data-span="{{ d.span }}"
            {%- if d.dev %} data-slot{{ 's' if d.pslots|length > 1 else '' }}="{{ d.pshort }}"{% endif %}

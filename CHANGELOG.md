@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.6.3] - 2026-10-15
+
+### Fixed
+- 「磁盘」tab：**竖排下镜像盘只占 1 格** —— 竖排每排只有 1 列，
+  `grid-column: span 2` 放不下，上一版就把它截成了 1 格（编号写 0-1、实际占 1 格）。
+
+  现在按方向分开跨：
+  | 面板 | 跨法 |
+  |---|---|
+  | 横排 | `grid-column: span N` —— 横向跨列 |
+  | 竖排 | `grid-row: span N` —— **纵向跨行**（只有 1 列，只能竖着来） |
+
+  配套 CSS：`.baymap.mode-v{ grid-auto-rows:minmax(var(--bay-h),auto) }` 让行高统一，
+  `.bay-vspan{ height:auto; align-self:stretch }` 让格子撑满所占的多行
+  （`.bay` 上有固定 `height`，不放开的话占 2 行却只有 1 行高）
+
+  实测两种方向都真占 2 格、编号都是 `0-1 2 3 4 5 6 7 8`
+
 ## [1.6.2] - 2026-10-15
 
 ### Fixed
