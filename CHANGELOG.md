@@ -2,6 +2,7 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.8.0] - 2026-10-16
 ## [1.7.2] - 2026-10-15
 
 ### Changed

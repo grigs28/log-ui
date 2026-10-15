@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import (SECRET_KEY, get_sso_config, save_sso_config,
-                     get_retention, save_retention, RETENTION_CHOICES)
+                     get_retention, save_retention, RETENTION_CHOICES,
+                     save_notify)
 from . import retention as retention_mod
 from .auth import router as auth_router, handle_ticket
 from . import vl
@@ -21,6 +22,7 @@ from . import vecsync
 from . import collectors
 from . import disks
 from . import actions
+from . import notify
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -550,7 +552,8 @@ async def ws_tail(ws: WebSocket):
 
 # ---------------- 设置 ----------------
 @app.get("/settings")
-def settings_get(request: Request, reterr: str | None = None):
+def settings_get(request: Request, reterr: str | None = None,
+                 nerr: str | None = None, nok: str | None = None):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -561,7 +564,8 @@ def settings_get(request: Request, reterr: str | None = None):
          "theme": prefs["theme"], "sso": get_sso_config(),
          "retention_days": get_retention(), "retention_choices": RETENTION_CHOICES,
          "retention_live": retention_mod.current_retention_days(),
-         "reterr": reterr},
+         "reterr": reterr,
+         "notify": notify.status(), "nerr": nerr, "nok": nok},
     )
 
 
@@ -595,6 +599,41 @@ def settings_post(request: Request, refresh_sec: int = Form(10),
         "theme": theme,
     })
     return RedirectResponse("/settings", status_code=303)
+
+
+@app.post("/settings/notify")
+def settings_notify(request: Request, enabled: str = Form(""),
+                    url: str = Form(""), api_key: str = Form(""),
+                    phones: str = Form(""),
+                    csrf_ok: None = Depends(csrf_protect)):
+    """保存钉钉通知配置。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/settings", status_code=303)
+    save_notify(enabled not in ("", "0", "false", "off"), url, api_key,
+                notify.clean_phones(phones))
+    return RedirectResponse("/settings", status_code=303)
+
+
+@app.post("/settings/notify/test")
+def settings_notify_test(request: Request, phones: str = Form(""),
+                         csrf_ok: None = Depends(csrf_protect)):
+    """发一条测试消息。表单里带的手机号优先，没带就用已保存的接收人。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/settings", status_code=303)
+    lst = notify.clean_phones(phones)
+    r = notify.send("log-ui 测试消息",
+                    "## log-ui 测试消息\n\n"
+                    "如果你看到这条，说明钉钉通知已打通。\n\n"
+                    "发送人：%s" % (user.get("display_name") or user.get("username") or "-"),
+                    phones=lst or None)
+    key = "nok" if r["ok"] else "nerr"
+    return RedirectResponse(f"/settings?{key}={quote(r['msg'][:200])}", status_code=303)
 
 
 @app.post("/settings/sso")

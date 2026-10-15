@@ -57,6 +57,33 @@ def get_sso_config() -> dict:
     }
 
 
+# ---------------- 钉钉通知（settings 页可改，读时现取） ----------------
+
+def get_notify() -> dict:
+    """钉钉通知配置。没配过时给默认值（指内网 DingTalkVPN）。"""
+    c = _load()
+    n = c.get("notify") or {}
+    return {
+        "enabled": bool(n.get("enabled", False)),
+        "url": (n.get("url") or "").strip(),
+        "api_key": (n.get("api_key") or "").strip(),
+        "phones": [str(p).strip() for p in (n.get("phones") or []) if str(p).strip()],
+    }
+
+
+def save_notify(enabled: bool, url: str, api_key: str, phones) -> None:
+    c = _load()
+    c["notify"] = {
+        "enabled": bool(enabled),
+        "url": (url or "").strip().rstrip("/"),
+        "api_key": (api_key or "").strip(),
+        "phones": list(phones or []),
+    }
+    _CFG_PATH.write_text(
+        yaml.safe_dump(c, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+
 def save_sso_config(yz_login_url: str, yz_app_id: str) -> None:
     c = _load()
     c["yz_login_url"] = (yz_login_url or "").rstrip("/")

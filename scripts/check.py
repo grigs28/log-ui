@@ -102,6 +102,7 @@ FEATURE_MARKERS = {
         ("物理盘位属性", "data-dev"),
     ],
     "templates/base.html": [("脚本块", "{% block scripts %}")],
+    "templates/settings.html": [("钉钉通知", "/settings/notify")],
     # CSS 也要点名：改模板里的类名时，CSS 里的选择器很容易没跟着改
     # （v1.6.3 把 bay-span 拆成 bay-hspan/bay-vspan，结果「撑满所占网格」那条
     #   规则还指着旧类名，镜像盘又变回 1 格宽）

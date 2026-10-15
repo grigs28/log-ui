@@ -78,4 +78,58 @@
 
   <p class="meta" style="margin-top:12px"><a href="/auth/logout">登出 / 切换账号</a></p>
 </div>
+
+{% if user.is_admin %}
+<div class="card" style="max-width:760px">
+  <h3 style="margin-top:0">钉钉通知</h3>
+  <p class="meta">走内网 DingTalkVPN 微服务把告警发到钉钉。
+    接收人必须是在钉钉企业里的 11 位手机号。
+    <a href="http://192.168.0.18:5555" target="_blank" rel="noopener">打开 DingTalkVPN 管理界面</a></p>
+
+  {% if nerr %}
+  <p style="color:var(--error)"><b>⚠ 发送失败：</b>{{ nerr }}</p>
+  {% endif %}
+  {% if nok %}
+  <p style="color:var(--success)"><b>✓ 已提交：</b>{{ nok }}</p>
+  {% endif %}
+
+  <form method="post" action="/settings/notify">
+    <div class="row" style="margin-bottom:10px">
+      <div>
+        <label>启用</label>
+        <select name="enabled">
+          <option value="1" {{ 'selected' if notify.enabled else '' }}>开启</option>
+          <option value="0" {{ 'selected' if not notify.enabled else '' }}>关闭</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:260px">
+        <label>服务地址</label>
+        <input type="text" name="url" value="{{ notify.url }}" placeholder="http://192.168.0.18:5555" style="width:100%">
+      </div>
+      <div style="flex:1;min-width:240px">
+        <label>API Key {% if notify.api_key_masked != '未配置' %}<span class="meta">（当前 {{ notify.api_key_masked }}）</span>{% endif %}</label>
+        <input type="text" name="api_key" value="{{ notify.api_key }}" placeholder="sk-dingtalk-api-…" style="width:100%">
+      </div>
+    </div>
+    <label>接收人手机号（每行一个，也可用逗号分隔；非 11 位的会被自动丢掉）</label>
+    <textarea name="phones" rows="4" style="width:100%;background:var(--bg);color:var(--text);
+              border:1px solid var(--border);border-radius:7px;padding:7px 10px;
+              font-family:ui-monospace,monospace;font-size:13px"
+              placeholder="13293513336&#10;13800138000">{{ notify.phones|join('\n') }}</textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+      <button>保存</button>
+      <span class="meta">已配置 {{ notify.phones|length }} 个接收人 ·
+        {{ '已启用' if notify.enabled else '未启用' }}</span>
+    </div>
+  </form>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:14px 0">
+  <form method="post" action="/settings/notify/test" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn-muted">发送测试消息</button>
+    <span class="meta">用上面已保存的接收人；想只发给自己可以在这里临时填一个号 →</span>
+    <input type="text" name="phones" placeholder="临时手机号（可留空）" style="width:200px">
+  </form>
+  <p class="meta" style="margin-top:8px">先点「保存」再「发送测试消息」—— 测试用的是已保存的配置。</p>
+</div>
+{% endif %}
 {% endblock %}
