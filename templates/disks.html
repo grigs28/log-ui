@@ -71,6 +71,10 @@
     {% if s.classes %}
     <span class="srvstat" title="Ceph 设备类（crush class）">类 {{ s.classes|join('/') }}</span>
     {% endif %}
+    {% if s.ignored %}
+    <span class="srvstat" style="opacity:.7"
+          title="容量小于 64G，不当硬盘看（多为虚拟块设备）&#10;{% for g in s.ignored %}{{ g.dev }} {{ g.size }}&#10;{% endfor %}">忽略 {{ s.ignored|length }} 个&lt;64G</span>
+    {% endif %}
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     {% if s.unfiled and s.slots %}
     <span class="tag" title="日志里发现、机箱槽位里还没落档的盘（不占槽位数）。点「建档」按槽号顺序填进空槽">未建档 {{ s.unfiled }} 块</span>

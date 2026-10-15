@@ -634,6 +634,14 @@ def poll_logs() -> dict:
                     break
         ent["issue"] = ent["issues"][0] if ent["issues"] else ""
         ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
+
+        # 容量已知且过小 → 不是硬盘（虚拟块设备/残留），不进盘位图。
+        # 容量认不出来的照常保留，宁可多显示也不误杀。
+        tbv = size_tb(ent.get("size") or "")
+        if tbv is not None and tbv < MIN_SIZE_TB:
+            h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
+            h.setdefault("small", {})[dev] = ent.get("size", "")
+            continue
         h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
         h["disks"][dev] = ent
 
@@ -747,6 +755,10 @@ def _status_text(ent) -> str:
 
 SPAN_MAX = 8               # 单个设备最多占几个物理盘位（RAID5/6 也不会更多了）
 
+# 小于这个容量的设备不当硬盘看。实测 m4-nod12 的 /dev/rbd0 只有 4M ——
+# Ceph RBD 的虚拟块设备，不是物理盘，混进盘位图毫无意义。
+MIN_SIZE_TB = 0.064       # 64G
+
 
 def _span_of(dev: str, log_disks: dict, per_row: int = 0) -> int:
     """这个设备占几个**物理盘位**。
@@ -838,8 +850,11 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     log_disks = (log_h or {}).get("disks", {}) or {}
     # 没建过档的机器：先按默认盘位数摆一排空槽位，比空面板有信息量，
     # 也给了「日志发现的盘」一个可拖进去的目标。真实档案一旦存在就用档案。
-    layout = s.get("disks") or [{"slot": i, "dev": "", "osd": "", "note": ""}
-                                for i in range(max(1, int(default_slots or DEFAULT_SLOTS)))]
+    small = (log_h or {}).get("small") or {}      # 容量过小、不算硬盘的设备
+    layout = [x for x in (s.get("disks") or []) if (x.get("dev") or "") not in small]
+    if not layout and not s.get("disks"):
+        layout = [{"slot": i, "dev": "", "osd": "", "note": ""}
+                  for i in range(max(1, int(default_slots or DEFAULT_SLOTS)))]
     disks = []
     used_devs = set()
     for row in layout:
@@ -952,6 +967,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "installed": sum(1 for x in disks if x["dev"] and x["slot"] is not None),
             "installed_any": sum(1 for x in disks if x["dev"]),
             "size_known": len(known), "total_size": total,
+            "ignored": [{"dev": d, "size": z} for d, z in sorted(small.items())],
             "media": media, "sys_count": sysn, "classes": classes,
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
