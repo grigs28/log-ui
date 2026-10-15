@@ -119,7 +119,10 @@
       <input type="number" name="rows" value="{{ s.h_rows or 3 }}" min="1" max="200"
              title="共几排。改这个才改总槽位数（= 每排 × 排数）">
       <span class="meta">排 = 总槽位数</span>
-      <b class="slot-count" data-per-row="{{ s.h_per_row }}" data-rows="{{ s.h_rows or 3 }}">{{ s.h_per_row * (s.h_rows or 3) }}</b>
+      {# 初值给**实际盘位数**（镜像盘占 2 位，每排×排数不再等于实际值）；
+         用户一动输入框就切换成「按每排 × 排数算出来的结果」 #}
+      <b class="slot-count" data-per-row="{{ s.h_per_row }}" data-rows="{{ s.h_rows or 3 }}"
+         data-slots="{{ s.slots }}">{{ s.slots or (s.h_per_row * (s.h_rows or 3)) }}</b>
       <span class="meta">个（只读，由每排 × 排数决定）</span>
       <button title="应用面板/盘向。总槽位数 = 每排 × 排数，已装盘的槽号不会被挤掉">应用</button>
     </form>
@@ -279,7 +282,7 @@
 
     per.addEventListener('input', function () {
       // 形状变了、机箱没变：排数倒推回同一个总槽位数
-      var want = out.dataset.rows * out.dataset.perRow;   // 页面载入时的总槽位数
+      var want = +out.dataset.slots || (+out.dataset.rows * +out.dataset.perRow);  // 实际盘位数
       if (want > 0 && +per.value > 0) {
         row.value = Math.max(1, Math.ceil(want / (+per.value || 1)));
       }

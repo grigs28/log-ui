@@ -370,21 +370,30 @@ def save_table(server: str, per_row, rows: list) -> None:
         return
     if per_row and int(per_row) > 0:      # 视图已由工具条单独管，这里留空即不动
         s["per_row"] = _clamp_per_row(per_row)
-    out, seen = [], set()
+    out = []
     for row in rows:
         slot, dev, osd, note, size = (list(row) + [""] * 5)[:5]
         try:
             n = int(str(slot).strip())
         except (TypeError, ValueError):
             continue                      # 槽号留空 → 删掉该行
-        if n in seen:
-            continue                      # 同槽号重复提交，取首个
-        seen.add(n)
         out.append({"slot": n, "dev": (dev or "").strip(),
                     "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
                     "note": (note or "").strip(),
                     "size": parse_size(size) or (size or "").strip()})
-    s["disks"] = sorted(out, key=lambda x: x["slot"])
+    # 盘位号只用来定**顺序**，真正的盘位由 _renumber 按 span 累加算出。
+    # 用稳定排序：两行填了同一个盘位号时不丢弃任何一行，保持提交顺序相邻排开
+    # —— 此前是「同槽号取首个」，用户新增一行填了已占用的号，新盘会被静默吞掉。
+    out.sort(key=lambda x: x["slot"])
+    # 但**同一块盘不能占两个盘位**：重复的设备名只保留第一行
+    dedup, seen_dev = [], set()
+    for row in out:
+        if row["dev"]:
+            if row["dev"] in seen_dev:
+                continue
+            seen_dev.add(row["dev"])
+        dedup.append(row)
+    s["disks"] = dedup
     _renumber(s, _log_disks_of(server), _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW))
     save(d)
 
