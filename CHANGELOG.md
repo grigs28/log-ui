@@ -2,6 +2,11 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.1.1] - 2026-10-15
+
+### Changed
+- 「磁盘」tab：镜像盘（RAID1）的框由紫系改为**蓝框**，与状态色（红/黄/绿）区分更清楚
+
 ## [1.1.0] - 2026-10-15
 
 ### Added
