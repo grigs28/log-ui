@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.4.1] - 2026-10-15
+
+### Fixed
+- 「磁盘」tab：**连续动作会因 w.sh 自更新而失败** —— `w.sh` 每次运行都会
+  强制重下并替换自己，替换那一瞬间 `/opt/grigs/w.sh` 不存在，
+  撞上就报 `FileNotFoundError: '/opt/grigs/w.sh'`（实测「关灯」那条中了，
+  紧跟着「亮灯」之后）。现在缺文件时按退避重试
+
 ## [1.4.0] - 2026-10-15
 
 ### Added

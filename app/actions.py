@@ -43,6 +43,25 @@ _SLOT_RE = re.compile(r'^e\d+/s\d+$')
 # 裸锚点会匹配到它（osd.poll.sh 的规格文档里记过同一个坑）
 _STATE_RE = re.compile(r'状态:\s*([✓✗⚠].*)$', re.M)
 
+def _run_wsh(ip: str, remote: str, timeout: int):
+    """调用 w.sh 把命令下发到节点。
+
+    w.sh 每次运行都会**强制自更新**（重下并替换自己），替换的那一瞬间
+    `/opt/grigs/w.sh` 会短暂不存在 —— 实测连续调用两次就撞上了
+    `FileNotFoundError: '/opt/grigs/w.sh'`。所以缺文件时短暂等待重试。
+    """
+    delay = 1.0
+    for attempt in range(5):
+        try:
+            return subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
+                                  capture_output=True, text=True, timeout=timeout)
+        except FileNotFoundError:
+            if attempt == 4:
+                raise
+            time.sleep(delay)
+            delay *= 1.7
+
+
 JOBS: dict = {}
 _LOCK = threading.Lock()
 # ssh.run.sh 的日志目录是 /tmp/ssh.run/<命令名>，同一台主机并发跑会互相覆盖日志，
@@ -116,8 +135,7 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         with _HOST_LOCKS_GUARD:
             hlock = _HOST_LOCKS.setdefault(host, threading.Lock())
         with hlock:
-            p = subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
-                               capture_output=True, text=True, timeout=timeout)
+            p = _run_wsh(ip, remote, timeout)
         out = _ANSI_RE.sub("", (p.stdout or "") + (("\n" + p.stderr) if p.stderr else ""))
         with _LOCK:
             job["rc"] = p.returncode
