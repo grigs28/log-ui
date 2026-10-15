@@ -25,6 +25,7 @@ import uuid
 from pathlib import Path
 
 from . import disks
+from .disks import _ANSI_RE
 
 GRIGS = "/opt/grigs"
 W_SH = f"{GRIGS}/w.sh"
@@ -38,10 +39,16 @@ OUT_MAX = 200_000          # 输出截断上限
 
 _DEV_RE = re.compile(r'^/dev/[a-zA-Z0-9]+$')
 _SLOT_RE = re.compile(r'^e\d+/s\d+$')
-_STATE_RE = re.compile(r'状态:\s*(\S.*)$', re.M)
+# 必须要求结论字符：脚本里还有一行「OSD 状态: osd.18 = osd.18」也含「状态:」，
+# 裸锚点会匹配到它（osd.poll.sh 的规格文档里记过同一个坑）
+_STATE_RE = re.compile(r'状态:\s*([✓✗⚠].*)$', re.M)
 
 JOBS: dict = {}
 _LOCK = threading.Lock()
+# ssh.run.sh 的日志目录是 /tmp/ssh.run/<命令名>，同一台主机并发跑会互相覆盖日志，
+# 所以按主机串行；不同主机互不影响（黄灯是脱离式的，不占锁）
+_HOST_LOCKS: dict = {}
+_HOST_LOCKS_GUARD = threading.Lock()
 
 
 class Rejected(Exception):
@@ -76,9 +83,12 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         slots = [s for s in _slots_of(host, dev) if _SLOT_RE.match(s)]
         targets = " ".join(slots) if slots else dev
         n = max(10, min(int(seconds), 1800))
-        # 不传超时参数（会与 OSD 号混淆）；用 stdin 在 N 秒后送一个换行，
-        # 脚本的 wait_for_input 收到即「用户主动停止」，时长精确
-        return f"{{ sleep {n}; echo; sleep 3600; }} | {LED_SH} {flag}{targets}"
+        # 不传超时参数（纯数字会与 OSD 号混淆）；用 stdin 在 N 秒后送一个换行，
+        # 脚本的 wait_for_input 收到即「用户主动停止」，时长精确。
+        # 外面套 nohup + & ：ssh 立即返回，灯自己在节点上闪 ——
+        # 这样一次可以点好几块盘同时闪，不用等前一块亮完。
+        inner = f"{{ sleep {n}; echo; sleep 3600; }} | {LED_SH} {flag}{targets}"
+        return f"nohup bash -c '{inner}' >/tmp/osd.led.out 2>&1 & echo 已下发 pid=$!"
 
     raise Rejected(f"未知动作: {action!r}")
 
@@ -93,9 +103,12 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         job["cmd"] = remote
 
         timeout = CHECK_TIMEOUT if action == "check" else max(60, seconds + 90)
-        p = subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
-                           capture_output=True, text=True, timeout=timeout)
-        out = (p.stdout or "") + (("\n" + p.stderr) if p.stderr else "")
+        with _HOST_LOCKS_GUARD:
+            hlock = _HOST_LOCKS.setdefault(host, threading.Lock())
+        with hlock:
+            p = subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
+                               capture_output=True, text=True, timeout=timeout)
+        out = _ANSI_RE.sub("", (p.stdout or "") + (("\n" + p.stderr) if p.stderr else ""))
         with _LOCK:
             job["rc"] = p.returncode
             job["output"] = out[:OUT_MAX]

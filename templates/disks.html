@@ -316,7 +316,8 @@
     fetch('/disks/act/' + id).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || j.state === 'missing') { clearInterval(timer); return; }
       var out = document.getElementById('act-out');
-      out.textContent = j.output || (j.state === 'running' ? '执行中…（检测含测速，可能要几十秒）' : '（无输出）');
+      out.textContent = j.output ||
+        (j.state === 'running' ? '执行中…（检测含测速，健康盘约 10 秒，坏盘可能 90 秒以上）' : '（无输出）');
       out.scrollTop = out.scrollHeight;
       document.getElementById('act-state').textContent =
         (j.state === 'running' ? '运行中 ' : '完成 ') + j.elapsed + 's';
@@ -326,7 +327,9 @@
         document.getElementById('act-state').textContent = (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
         var v = j.verdict || {};
         document.getElementById('act-foot').textContent =
-          act === 'check' ? ('结论：' + (v.status || '未解析到状态行') + '   刷新页面即可看到新状态') : '';
+          act === 'check'
+            ? ('结论：' + (v.status || '未解析到状态行') + '   刷新页面即可看到新状态')
+            : '灯已下发，将在节点上亮 120 秒后自动熄灭（可多块盘同时点）';
         if (act === 'check') setTimeout(function () { location.reload(); }, 2500);
       }
     }).catch(function () {});
