@@ -20,6 +20,7 @@
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 40%, transparent); }
                    50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 0%, transparent); } }
 @keyframes fadeIn { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
+@keyframes fadeInOnly { from { opacity:0 } to { opacity:1 } }
 .fade-in { animation:fadeIn .4s ease-out both; }
 
 /* reset */
@@ -53,7 +54,11 @@ header .user{ color:var(--text2); font-size:13px; }
 header .user span{ color:var(--accent); font-weight:600; }
 
 /* layout */
-main{ padding:20px 24px; max-width:1500px; margin:0 auto; animation:fadeIn .5s ease-out both; }
+/* 只用 opacity 的淡入：fadeIn 结束时会保留 transform:translateY(0)，
+   而带 transform 的元素会成为 position:fixed 后代的**包含块** ——
+   弹窗、右键菜单这类 fixed 层就会被困在 main 里、跑到页面中部去。
+   （2026-10-15：动作弹窗"只见遮罩不见内容"就是这么来的） */
+main{ padding:20px 24px; max-width:1500px; margin:0 auto; animation:fadeInOnly .5s ease-out both; }
 .grid{ display:grid; gap:16px; }
 .g4{ grid-template-columns:repeat(4,1fr); }
 .g2{ grid-template-columns:repeat(2,1fr); }

@@ -246,6 +246,9 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
 {# ---------- 动作输出面板 ---------- #}
 <div id="actmodal" class="actmodal" hidden>
   <div class="actbox">
@@ -264,9 +267,6 @@
   </div>
 </div>
 
-{% endblock %}
-
-{% block scripts %}
 <script>
 /* ---- 单盘动作：重测 / 亮灯 ----
    格子上悬停出现两个按钮，点了起后台任务 → 弹窗显示进度条 + 结论 + 实时输出。

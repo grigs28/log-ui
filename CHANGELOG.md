@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.4.2] - 2026-10-15
+
+### Fixed
+- 「磁盘」tab：**动作弹窗只见遮罩、不见内容**。两个叠加的原因：
+
+  ① **`<main>` 成了 `position:fixed` 后代的包含块** —— 页头/主区用了
+  `animation: fadeIn … both`，而 `fadeIn` 的终态是 `transform: translateY(0)`
+  （**不是 `none`**）。带 transform 的元素会成为 fixed 后代的包含块，
+  于是弹窗的 `inset:0` 变成相对 `<main>`（20 张卡片、好几千像素高），
+  `.actbox` 的「居中」跑到了页面中部 —— 遮罩铺开、内容框在屏幕外。
+  现在 `main` 改用只动 opacity 的 `fadeInOnly`，终态不留 transform
+
+  ② **弹窗 DOM 被挪到了 Jinja 的块之外** —— Jinja 子模板中**块外内容不会输出**，
+  `actmodal` 整个没渲染，`getElementById` 拿到 null，动作脚本直接 return。
+  现在放进 `{% block scripts %}`（该块渲染在 `</main>` 之后）—— 两个问题一起根治
+
 ## [1.4.1] - 2026-10-15
 
 ### Fixed
