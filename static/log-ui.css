@@ -301,7 +301,34 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
   overflow-x:auto; width:max-content; max-width:100%;
 }
 .baymap.orient-v{ --bay-w:64px;  --bay-h:132px; }
-.baymap.orient-h{ --bay-w:230px; --bay-h:66px;  }
+.baymap.orient-h{ --bay-w:300px; --bay-h:78px;  }
+
+/* ── 盘向：格子里内容怎么排 ─────────────────────────────
+   竖装 = 窄高，内容竖着堆；横装 = 宽扁，内容横着排。
+   （尺寸变量在上面，这里管内容布局 —— 两者都要有，少一个就会「字显示不全」） */
+
+/* 竖装：一列到底 */
+.baymap.orient-v .bay{ flex-direction:column; gap:2px; padding:5px 2px 17px; }
+.baymap.orient-v .bay-slot{ font-size:16px; }
+.baymap.orient-v .bay-dev{ font-size:11px; }
+.baymap.orient-v .bay-size{ font-size:11px; flex-wrap:wrap; }
+.baymap.orient-v .bay-role{ font-size:10px; }
+.baymap.orient-v .bay-osd{ font-size:10px; }
+/* 64px 宽放不下「健康」二字，只留状态圆点（完整信息在悬停里） */
+.baymap.orient-v .sbadge .sblabel{ display:none; }
+.baymap.orient-v .sbadge{ padding:1px 4px; }
+
+/* 横装：一行排不下就折成两行（不裁字） */
+.baymap.orient-h .bay{
+  flex-direction:row; flex-wrap:wrap; align-content:center; justify-content:flex-start;
+  gap:3px 8px; padding:5px 10px 17px; text-align:left;
+}
+.baymap.orient-h .bay-slot{ font-size:14px; min-width:20px; text-align:center; }
+.baymap.orient-h .bay-dev{ font-size:12px; min-width:32px; }
+.baymap.orient-h .bay-size{ font-size:11px; justify-content:flex-start; }
+.baymap.orient-h .bay-role{ flex-direction:row; align-items:center; gap:4px; font-size:10px; }
+.baymap.orient-h .bay-osd{ font-size:10px; }
+.baymap.orient-h .sbadge{ font-size:10px; }
 
 .bay{
   /* --led 是这块盘的状态色，所有灯条都取它 */

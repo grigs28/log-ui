@@ -108,6 +108,7 @@ FEATURE_MARKERS = {
     #   规则还指着旧类名，镜像盘又变回 1 格宽）
     "static/log-ui.css": [
         ("镜像盘撑满占位", ".baymap .bay-hspan"),
+        ("横装内容横排", ".baymap.orient-h .bay"),
         ("竖排行高统一", "grid-auto-rows"),
     ],
 }
