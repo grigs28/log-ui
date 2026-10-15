@@ -289,6 +289,14 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .ordersave[hidden]{ display:none; }
 .ordersave button{ padding:3px 11px; font-size:12px; }
 
+/* 盘位格子上的「⋯」按钮：右键被拦截时的备用入口，悬停才出现 */
+.bay-menu{ position:absolute; top:1px; right:1px; width:14px; height:14px; padding:0;
+           line-height:1; font-size:11px; font-weight:700; border-radius:3px;
+           background:var(--surface); color:var(--muted); border:1px solid var(--border-light);
+           opacity:0; transition:opacity .12s; cursor:pointer; z-index:3; }
+.bay-live:hover .bay-menu{ opacity:1; }
+.bay-menu:hover{ background:var(--accent); color:#000; border-color:var(--accent); transform:none; }
+
 /* 右键菜单（单盘动作） */
 .ctxmenu{ position:fixed; z-index:50; min-width:210px; padding:4px;
           background:var(--surface); border:1px solid var(--border-light);

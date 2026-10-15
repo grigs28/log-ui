@@ -157,6 +157,7 @@
         </div>
         <div class="bay-osd">{% if d.osd %}osd.{{ d.osd }}{% endif %}</div>
         {% endif %}
+        {% if d.dev %}<button type="button" class="bay-menu" title="单盘检测 / 点灯">⋯</button>{% endif %}
         {% if d.state != 'none' %}
         <span class="sbadge sbadge-{{ d.state }}">
           <span class="dot {{ d.state if d.state in ('ok','err','warn') else '' }}"></span><span class="sblabel">{{ d.label }}</span>
@@ -285,21 +286,39 @@
 
   function closeMenu() { menu.hidden = true; }
 
+  function openMenu(bay, x, y) {
+    cur = bay;
+    var slotEl = bay.querySelector('.bay-slot');
+    document.getElementById('ctx-title').textContent =
+      (bay.dataset.dev || '').replace('/dev/', '') + '  ·  ' + (bay.dataset.dev || '');
+    document.getElementById('ctx-sub').textContent =
+      '盘位 ' + (slotEl ? slotEl.textContent.trim() : '—') +
+      (bay.dataset.slot || bay.dataset.slots ? '  物理 ' + (bay.dataset.slot || bay.dataset.slots) : '');
+    menu.hidden = false;
+    var w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = Math.max(4, Math.min(x, innerWidth - w - 8)) + 'px';
+    menu.style.top = Math.max(4, Math.min(y, innerHeight - h - 8)) + 'px';
+  }
+
   document.addEventListener('contextmenu', function (e) {
     var bay = e.target.closest && e.target.closest('.bay-live');
     if (!bay || !bay.dataset.dev) return;
     e.preventDefault();
-    cur = bay;
-    document.getElementById('ctx-title').textContent =
-      (bay.dataset.dev || '').replace('/dev/', '') + '  ·  ' + (bay.dataset.dev || '');
-    document.getElementById('ctx-sub').textContent =
-      '盘位 ' + (bay.querySelector('.bay-slot') || {}).textContent +
-      (bay.dataset.slots ? '  物理 ' + bay.dataset.slots : '');
-    menu.hidden = false;
-    var w = menu.offsetWidth, h = menu.offsetHeight;
-    menu.style.left = Math.min(e.clientX, innerWidth - w - 8) + 'px';
-    menu.style.top = Math.min(e.clientY, innerHeight - h - 8) + 'px';
+    openMenu(bay, e.clientX, e.clientY);
   });
+
+  // 「⋯」按钮：有些访问方式（远程桌面/网页桥接）会吞掉右键，给一条备用入口
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.bay-menu');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var bay = btn.closest('.bay-live');
+    if (!bay || !bay.dataset.dev) return;
+    var r = btn.getBoundingClientRect();
+    openMenu(bay, r.left, r.bottom + 4);
+  }, true);
+
   document.addEventListener('click', closeMenu);
   document.addEventListener('scroll', closeMenu, true);
 
