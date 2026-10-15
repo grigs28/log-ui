@@ -121,10 +121,11 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         slots = [s for s in _slots_of(host, dev) if _SLOT_RE.match(s)]
         targets = " ".join(slots) if slots else dev
         esc = re.escape(targets)
-        # 三种命令行都要匹配：经 w.sh 下发的、直接调的 osd.led.sh、以及 -f/不带 -f 两种
-        return (f"pkill -TERM -f 'w\\.sh osd\\.led\\.sh -f {esc}' || true; "
-                f"pkill -TERM -f 'osd\\.led\\.sh -f {esc}' || true; "
-                f"pkill -TERM -f 'osd\\.led\\.sh {esc}' || true; echo 已发送关灯")
+        # 只按**目标**匹配，不依赖开关组合（-f / -a 的个数和顺序会变）。
+        # 末尾加 ([^0-9]|$) 是为了不误伤相邻槽位：目标是 e252/s2 时，
+        # 无边界会连 e252/s20 的进程一起杀掉。
+        return (f"pkill -TERM -f 'osd\\.led\\.sh .*{esc}([^0-9]|$)' || true; "
+                f"echo 已发送关灯")
 
     if action in ("led-fail", "led-locate"):
         flag = "-f " if action == "led-fail" else ""
@@ -135,7 +136,10 @@ def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -
         # 脚本的 wait_for_input 收到即「用户主动停止」，时长精确。
         # 外面套 nohup + & ：ssh 立即返回，灯自己在节点上闪 ——
         # 这样一次可以点好几块盘同时闪，不用等前一块亮完。
-        inner = f"{{ sleep {n}; echo; sleep 3600; }} | {W_SH} osd.led.sh {flag}{targets}"
+        # -a / --all-members：跳过健康闸门，VD 全成员点灯（正常盘也点）。
+        # 不加这个，健康的 MegaRAID 虚拟盘会被脚本拒绝（"没有需要指的坏盘，不点灯"），
+        # 只能退而用物理槽位形式；加了之后设备名形式也能点亮。
+        inner = f"{{ sleep {n}; echo; sleep 3600; }} | {W_SH} osd.led.sh {flag}-a {targets}"
         return f"nohup bash -c '{inner}' >/tmp/osd.led.out 2>&1 & echo 已下发 pid=$!"
 
     raise Rejected(f"未知动作: {action!r}")
