@@ -11,17 +11,6 @@
   </span>
 </div>
 
-{% if is_admin and not edit_server %}
-<div class="card" style="max-width:760px;margin-bottom:14px">
-  <form method="post" action="/disks/server/add" class="row">
-    <div><label>服务器名</label><input type="text" name="name" required placeholder="如 v5-ctr02"></div>
-    <div><label>IP</label><input type="text" name="ip" placeholder="192.168.93.x"></div>
-    <div><label>每排数量</label><input type="number" name="per_row" value="{{ settings.default_per_row }}" min="1" max="24" style="width:90px"></div>
-    <div><button>添加服务器</button></div>
-  </form>
-</div>
-{% endif %}
-
 {% if runs %}
 <div class="card" style="margin-bottom:14px">
   <details>
@@ -138,6 +127,21 @@
 {% endfor %}
 
 {% if not servers %}
-<div class="card"><p class="meta">暂无服务器。可在上方添加，或检查 NAS hosts 文件与 osd-poll 日志是否可达。</p></div>
+<div class="card"><p class="meta">暂无服务器。可在下方添加，或检查 NAS hosts 文件与 osd-poll 日志是否可达。</p></div>
+{% endif %}
+
+{# ---------- 添加服务器（放页面底部） ---------- #}
+{% if is_admin and not edit_server %}
+<div class="card" style="max-width:760px">
+  <details {% if not servers %}open{% endif %}>
+    <summary class="meta">添加服务器（手工建档；日志发现的服务器会自动出现在上方，可点「建档」落档）</summary>
+    <form method="post" action="/disks/server/add" class="row" style="margin-top:10px">
+      <div><label>服务器名</label><input type="text" name="name" required placeholder="如 v5-ctr02"></div>
+      <div><label>IP</label><input type="text" name="ip" placeholder="192.168.93.x"></div>
+      <div><label>每排数量</label><input type="number" name="per_row" value="{{ settings.default_per_row }}" min="1" max="24" style="width:90px"></div>
+      <div><button>添加服务器</button></div>
+    </form>
+  </details>
+</div>
 {% endif %}
 {% endblock %}
