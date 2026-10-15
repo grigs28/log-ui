@@ -2,6 +2,25 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.9.5] - 2026-10-15
+
+### Fixed
+- **线上 500：`POST /disks/view` 报 `NameError: name 'back' is not defined`**（v0.9.4 引入）。
+  v0.9.4 给各 `disks_*` 路由加回跳参数时是用脚本做字符串替换的，
+  `disks_view` 的**签名替换没匹配上、但函数体 `_disks_back(back)` 的替换成功了** ——
+  引用了一个不存在的参数。`python -m py_compile` 只查语法，查不出未定义名，
+  所以一路部署到了生产。页面本身能打开，只有点「应用」才 500
+
+### Added
+- `scripts/check.py`：提交前自检 —— 静态检查（py_compile + pyflakes + 路由表单字段
+  与函数签名一致性）＋ 10 条 **路由冒烟**（打一遍 /disks 全部路由和主要页面，确认无 5xx）。
+  冒烟前把 `disks.PATH` 重定向到临时文件，**绝不碰真实 `config/disks.yaml`**
+- `scripts/pre-commit`：接上静态检查，这类错误不再能提交
+
+### Changed
+- 顺手清掉既有 pyflakes 告警：`collectors.py` 未使用的 `import os`、
+  `vl.py` 两处没有占位符的 f-string
+
 ## [0.9.4] - 2026-10-15
 
 ### Changed

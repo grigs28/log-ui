@@ -393,7 +393,7 @@ def disks_archive(request: Request, server: str = Form(""), back: str = Form("")
 @app.post("/disks/view")
 def disks_view(request: Request, server: str = Form(""), mode: str = Form(""),
                orient: str = Form(""), per_row: int = Form(0), rows: int = Form(0),
-               ip: str = Form(""),
+               ip: str = Form(""), back: str = Form(""),
                csrf_ok: None = Depends(csrf_protect)):
     """面板横竖 + 盘向 + 每排数量 + 排数（每排 × 排数 = 槽位数）。"""
     user = _require_user(request)

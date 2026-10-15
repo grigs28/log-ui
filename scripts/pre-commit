@@ -28,4 +28,16 @@ if ! printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
   exit 1
 fi
 
+# 静态检查：抓「函数体用了签名里没有的参数」这类错误。
+# 2026-10-15 线上 500 就是它 —— 批量替换路由签名时漏了一处，
+# py_compile 只查语法查不出来，一路部署到了生产。
+if [ -x scripts/check.py ]; then
+  if ! ./scripts/check.py --static; then
+    echo
+    echo "✋ 拦截：自检未通过（上面有明细）"
+    echo "  只跑静态检查，路由冒烟用 ./scripts/check.py"
+    exit 1
+  fi
+fi
+
 exit 0

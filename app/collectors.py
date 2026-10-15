@@ -14,7 +14,6 @@ settings.yaml 设 selfheal: false 可整体关闭。
 """
 import asyncio
 import json
-import os
 import subprocess
 import time
 

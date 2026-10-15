@@ -105,7 +105,7 @@ def host_summary(days: int = 7):
     try:
         r = httpx.get(
             f"{VL_URL}/select/logsql/stats_query",
-            params={"query": f"* | stats by(hostname) count(), max(_time)", "start": s, "end": e},
+            params={"query": "* | stats by(hostname) count(), max(_time)", "start": s, "end": e},
             timeout=30,
         )
         for res in r.json().get("data", {}).get("result", []):
@@ -124,7 +124,7 @@ def host_summary(days: int = 7):
     try:
         r = httpx.get(
             f"{VL_URL}/select/logsql/stats_query",
-            params={"query": f"level:error | stats by(hostname) count()", "start": s, "end": e},
+            params={"query": "level:error | stats by(hostname) count()", "start": s, "end": e},
             timeout=30,
         )
         for res in r.json().get("data", {}).get("result", []):
