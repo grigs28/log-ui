@@ -880,8 +880,20 @@ def _recount(sv: dict) -> dict:
         sv["state"], sv["label"] = "err", f"{bad} 异常"
     elif unknown or poll_errors or sv.get("unbuilt"):
         sv["state"] = "warn"
-        sv["label"] = (f"{unknown} 未知" if unknown else
-                       ("未建档" if sv.get("unbuilt") else "轮询异常"))
+        if unknown:
+            # 格子上分「警告」（有 ⚠ 明细）和「无记录」（日志查不到），
+            # 卡片汇总也照这个口径说清楚，别一律叫「未知」
+            warns = sum(1 for x in disks_ if x["state"] == "warn" and x.get("issues"))
+            miss = sum(1 for x in disks_ if x["state"] == "warn"
+                       and not x.get("issues") and not x["known"] and x["dev"])
+            parts = []
+            if warns:
+                parts.append(f"{warns} 警告")
+            if miss:
+                parts.append(f"{miss} 无记录")
+            sv["label"] = " · ".join(parts) if parts else f"{unknown} 未知"
+        else:
+            sv["label"] = "未建档" if sv.get("unbuilt") else "轮询异常"
     else:
         sv["state"], sv["label"] = ("ok", "全部健康") if disks_ else ("none", "")
     return sv

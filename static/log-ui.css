@@ -307,10 +307,14 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .ordersave button{ padding:3px 11px; font-size:12px; }
 
 /* 服务器卡片头部：信息行比普通 .meta 大一号、亮一档 */
-.srvhead{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
-.srvhead .srvname{ font-size:17px; letter-spacing:-.01em; }
-.srvstat{ font-size:14px; color:var(--text2); }
+.srvhead{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; margin-bottom:10px; }
+.srvhead .srvname{ font-size:20px; letter-spacing:-.01em; }
+.srvstat{ font-size:16px; color:var(--text2); }
 .srvstat b{ color:var(--text); }
+
+/* 头部这枚状态徽章要比格子里的那颗大得多 —— 它是整机结论，一眼要看到 */
+.srvhead .sbadge{ font-size:16px; font-weight:700; padding:5px 16px; gap:7px; }
+.srvhead .sbadge .dot{ width:10px; height:10px; }
 
 /* 盘位格子的动作按钮（重测 / 亮灯）：悬停才出现，贴在格子底部 */
 .bay-acts{ position:absolute; left:2px; right:2px; bottom:2px; display:flex; gap:2px;
