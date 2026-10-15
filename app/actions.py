@@ -78,6 +78,48 @@ def _run_wsh(ip: str, remote: str, timeout: int, expect_verdict: bool = False):
     raise last if last is not None else RuntimeError("w.sh 调用失败")
 
 
+# 任务状态落盘：log-ui 重启（部署 / 崩溃）会把内存里的任务全丢掉，
+# 前端轮询拿到 missing 就只能干等 —— 所以把任务存一份，重启后能说清
+# 「这个任务被中断了」，已完成的任务输出也还在。
+JOBS_FILE = Path(__file__).resolve().parent.parent / "config" / "act_jobs.json"
+KEEP_JOBS = 20
+PERSIST_OUT = 60_000       # 落盘的输出上限
+
+
+def _persist() -> None:
+    try:
+        with _LOCK:
+            items = list(JOBS.items())[-KEEP_JOBS:]
+            data = {}
+            for k, v in items:
+                j = dict(v)
+                j["output"] = (j.get("output") or "")[:PERSIST_OUT]
+                data[k] = j
+        JOBS_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _restore() -> None:
+    """启动时读回任务；上次还在 running 的，说明是被重启打断的。"""
+    try:
+        data = json.loads(JOBS_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return
+    now = time.time()
+    with _LOCK:
+        for k, v in data.items():
+            if v.get("state") == "running":
+                v["state"] = "done"
+                v["rc"] = -9
+                v["ended"] = v.get("ended") or now
+                v["output"] = (v.get("output") or "") + (
+                    "\n" + "=" * 60 +
+                    "\n✗ 任务被中断：log-ui 服务在这个任务运行期间重启过（部署或崩溃），"
+                    "\n  远端命令已随进程一起丢失，需要重新执行一次。")
+            JOBS[k] = v
+
+
 JOBS: dict = {}
 _LOCK = threading.Lock()
 # ssh.run.sh 的日志目录是 /tmp/ssh.run/<命令名>，同一台主机并发跑会互相覆盖日志，
@@ -196,6 +238,7 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         with _LOCK:
             job["state"] = "done"
             job["ended"] = time.time()
+        _persist()
 
 
 def start(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> dict:
@@ -214,6 +257,7 @@ def start(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> dict:
                         "state": "running", "started": time.time(), "ended": None,
                         "rc": None, "output": "", "verdict": None, "cmd": "",
                         "seconds": seconds}
+    _persist()
     threading.Thread(target=_run, args=(job_id, action, host, dev, seconds),
                      daemon=True).start()
     return JOBS[job_id]
@@ -221,6 +265,9 @@ def start(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> dict:
 
 def get(job_id: str) -> dict:
     return JOBS.get(job_id) or {}
+
+
+_restore()      # 模块加载时读回上次的任务（被中断的会被标出来）
 
 
 def _gc() -> None:

@@ -364,7 +364,21 @@
 
   function poll(id, act) {
     fetch('/disks/act/' + id).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || j.state === 'missing') { stopTimers(); return; }
+      if (!j || j.state === 'missing') {
+        // 任务不见了：多半是 log-ui 在它运行期间重启过（部署更新或崩溃），
+        // 内存里的任务会随之丢失。绝不能默默停住 —— 那样弹窗会永远停在
+        // 「运行中 Ns」，看着像界面卡死。
+        stopTimers();
+        elState.textContent = '任务丢失';
+        bar(100, 'err');
+        elVerd.textContent = '⚠ 任务状态已丢失';
+        elVerd.className = 'actverdict warn';
+        elOut.textContent = '这个任务的状态找不到了 —— 通常是 log-ui 服务在它运行期间' +
+          '重启过（部署更新或崩溃），内存里的任务会一起丢失。\n\n' +
+          '请关闭弹窗后重新执行一次。';
+        elFoot.textContent = '';
+        return;
+      }
       elOut.textContent = j.output ||
         (j.state === 'running' ? '执行中…' : '（无输出）');
       elOut.scrollTop = elOut.scrollHeight;
