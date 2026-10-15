@@ -304,34 +304,21 @@
     elVerd.className = 'actverdict';
     elFoot.textContent = '';
     elOff.hidden = true;
+    document.getElementById('act-close').textContent = '关闭';
+    needReload = false;
     bar(3);
   }
 
-  function stopTimers() { clearInterval(timer); clearInterval(cdTimer); clearTimeout(acTimer); }
+  function stopTimers() { clearInterval(timer); clearInterval(cdTimer); }
 
-  var acTimer = null, acLeft = 0;
-  /* 该自己关的时候就别让人手点。刷新由调用方决定（检测完要刷新才能看到新状态）。 */
-  function autoClose(sec, note) {
-    clearTimeout(acTimer);
-    var reload = arguments.length > 2 ? arguments[2] : /刷新/.test(note || '');
-    acLeft = Math.ceil(sec);
-    var tick = function () {
-      if (acLeft <= 0) {
-        hideModal();
-        if (reload) location.reload();
-        return;
-      }
-      elFoot.textContent = (note || '') + ' · ' + acLeft + ' 秒后自动关闭';
-      acLeft--;
-      acTimer = setTimeout(tick, 1000);
-    };
-    tick();
-  }
+  // 检测完不自动关：输出可能很长，得让人看完自己关。
+  // 关闭时才刷新页面（新状态在那之后才显示）。
+  var needReload = false;
 
   function hideModal() {
     modal.hidden = true;
     stopTimers();
-    acTimer = null;
+    if (needReload) { needReload = false; location.reload(); }
   }
 
   /* 亮灯：任务 1 秒就返回了，之后是本地倒计时 */
@@ -351,7 +338,7 @@
         elVerd.textContent = '🔅 灯已自动熄灭';
         elVerd.className = 'actverdict';
         elOff.hidden = true;
-        autoClose(2);
+        elFoot.textContent = '看完自己关（Esc 或点遮罩也行）；下次「亮灯」想提前关就用弹窗里的「关灯」';
       }
     }, 1000);
   }
@@ -378,13 +365,14 @@
         bar(100, cls);
         elVerd.textContent = st ? ('结论：' + st) : '未解析到状态行';
         elVerd.className = 'actverdict ' + cls;
-        autoClose(2.5, '即将自动关闭并刷新页面');
+        needReload = true;
+        document.getElementById('act-close').textContent = '关闭并刷新';
+        elFoot.textContent = '看完再关 —— 关闭后自动刷新，盘位状态就更新了（Esc 或点遮罩也能关）';
       } else if (act === 'led-off') {
         bar(100);
         elVerd.textContent = '🔅 已发送关灯';
         elVerd.className = 'actverdict';
         elOff.hidden = true;
-        autoClose(1.5);
       } else {
         startCountdown(j.seconds || LED_SECONDS);
       }
