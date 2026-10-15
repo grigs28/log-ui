@@ -223,23 +223,37 @@ def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
 
 
 def save_order(server: str, rows: list) -> int:
-    """按面板显示顺序重排盘位：槽号 = 视觉顺序号（0..N-1）。
+    """按面板显示顺序重排盘位：槽号 = 视觉顺序号（0..N-1）。返回写入的盘位数。
 
-    面板顺序即档案顺序，故整表替换。拖动进来的「日志发现」盘会一并落档。
-    返回写入的盘位数。
+    **不凭空扩容**：面板尾部那几块「日志发现的盘」跟着一起提交，若直接编号就会
+    把机箱从 8 槽变成 9 槽——用户只是拖了下位置，槽位数不该变。规则是
+      · 总槽位数 = max(原声明槽位数, 实际装了盘的块数)
+      · 多出来的格子优先丢**空槽**（空槽只是占位，丢了不损失信息），从后往前丢
+      · 盘数真的超过槽位数时才扩容
     """
     d = load()
     s = get_server(d, (server or "").strip())
     if s is None or not rows:
         return 0
-    out = []
-    for i, item in enumerate(rows):
+    declared = sum(1 for x in s["disks"] if x.get("slot") is not None)
+    items = []
+    for item in rows:
         dev, osd, note, size = (list(item) + ["", "", "", ""])[:4]
-        out.append({"slot": i,
-                    "dev": (dev or "").strip(),
-                    "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
-                    "note": (note or "").strip(),
-                    "size": (size or "").strip()})
+        items.append({"dev": (dev or "").strip(),
+                      "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
+                      "note": (note or "").strip(),
+                      "size": (size or "").strip()})
+    total = max(declared, sum(1 for x in items if x["dev"]))
+    excess = len(items) - total
+    for i in range(len(items) - 1, -1, -1):     # 从后往前丢空槽
+        if excess <= 0:
+            break
+        if not items[i]["dev"]:
+            items.pop(i)
+            excess -= 1
+    while len(items) < total:                   # 不够就补空槽
+        items.append({"dev": "", "osd": "", "note": "", "size": ""})
+    out = [dict(x, slot=i) for i, x in enumerate(items)]
     s["disks"] = out
     save(d)
     return len(out)
@@ -598,9 +612,13 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
             "row_count": len(rows), "rows": rows, "disks": disks,
             "slots": len(framed), "layout_rows": layout_rows, "h_rows": h_rows,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
-            # count = 面板格子数（含空槽），installed = 其中真装了盘的数量
+            # count = 面板格子数（含空槽）；installed = **有槽号的**格子里装了盘的数量。
+            # 日志发现但未建档的盘没有槽号、不占机箱槽位，故不计入 installed ——
+            # 否则卡片头部「已装 1 / 共 9 槽」会和工具条「总槽位数 8」对不上。
+            # 这些盘由 unfiled 单独计数，头部另有一枚「未建档」标签说明。
             "count": len(disks),
-            "installed": sum(1 for x in disks if x["dev"]),
+            "installed": sum(1 for x in disks if x["dev"] and x["slot"] is not None),
+            "installed_any": sum(1 for x in disks if x["dev"]),
             "size_known": len(known), "total_size": total,
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,

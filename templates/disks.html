@@ -35,14 +35,27 @@
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
     <b>{{ s.name }}</b>
     <span class="sbadge sbadge-{{ s.state }}"
-          title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;共 {{ s.count }} 盘 · 异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
+          title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;机箱 {{ s.slots }} 槽 · 已装 {{ s.installed }} 块 · 空槽 {{ s.slots - s.installed }}{% if s.unfiled %}&#10;另有 {{ s.unfiled }} 块日志发现、未建档（不在槽内）{% endif %}&#10;异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
     <span class="meta">{{ s.ip or '无 IP' }}</span>
-    <span class="meta">已装 {{ s.installed }}{% if s.count != s.installed %} / 共 {{ s.count }} 槽{% else %} 盘{% endif %}</span>
+    {# 「共 N 槽」必须与工具条「总槽位数」同源（都只数有槽号的格子），
+       未建档的日志发现盘单列，否则同一张卡片里两个槽数会对不上 #}
+    <span class="meta">
+      {%- if s.slots -%}
+        已装 {{ s.installed }} / 共 {{ s.slots }} 槽
+      {%- elif s.unfiled -%}
+        未建槽位
+      {%- else -%}
+        无盘位
+      {%- endif -%}
+    </span>
     {% if s.total_size %}
-    <span class="meta" title="{% if s.size_known < s.installed %}仅统计已填容量的 {{ s.size_known }} / {{ s.installed }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
+    <span class="meta" title="{% if s.size_known < s.installed_any %}仅统计已填容量的 {{ s.size_known }} / {{ s.installed_any }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
     {% endif %}
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
+    {% if s.unfiled and s.slots %}
+    <span class="tag" title="日志里发现、机箱槽位里还没落档的盘（不占槽位数）。点「建档」按槽号顺序填进空槽">未建档 {{ s.unfiled }} 块</span>
+    {% endif %}
     <span style="flex:1"></span>
     {% if is_admin %}
     {% if s.unfiled %}
@@ -125,7 +138,9 @@
     <span>盘位顺序已改动</span>
     <button type="button" data-act="save">保存顺序</button>
     <button type="button" class="btn-muted" data-act="reset">放弃</button>
-    <span class="meta">保存后槽号按新顺序重排为 0‥N-1；日志发现的盘会一并落档</span>
+    <span class="meta">保存后槽号按新顺序重排为 0‥N-1。
+      <b>总槽位数不变</b>：日志发现的盘只是填进现有空槽；
+      只有盘数真超过槽位数时才扩容</span>
   </div>
   {% endif %}
 
