@@ -606,7 +606,7 @@ def poll_logs() -> dict:
         # 只留最近一批：该盘最新记录往前 BURST_SLACK 秒内的
         batch = sorted((e for e in evs if e[0] >= newest - BURST_SLACK), key=lambda e: e[0])
         ent = {"osd": "", "attr": "", "status": "", "issue": "",
-               "issues": [], "warns": []}
+               "issues": [], "warns": [], "ts": newest}
         seen = set()
         for ep, tag, body, osd, attr, _addr in batch:
             if tag == "异常":
@@ -660,31 +660,39 @@ def merged(include_hosts: bool = True) -> dict:
     by_host = logs["by_host"]
     dslots = int(d["settings"].get("default_slots") or DEFAULT_SLOTS)
 
+    from . import actions
+    manual = actions.manual_checks()
+
     servers = []
     seen = set()
     for s in d["servers"]:
-        servers.append(_assemble(s, by_host.get(s["name"]), default_slots=dslots))
+        sv = _assemble(s, by_host.get(s["name"]), default_slots=dslots)
+        _apply_manual(sv["disks"], s["name"], manual)
+        servers.append(_recount(sv))
         seen.add(s["name"])
     # 日志里出现但布局中没有的主机：只读展示，提示「未建档」
     for name, h in sorted(by_host.items()):
         if name in seen:
             continue
-        servers.append(_assemble({"name": name, "ip": h.get("ip", ""),
+        sv = _assemble({"name": name, "ip": h.get("ip", ""),
                                   "mode": d["settings"].get("default_mode"),
                                   "orient": d["settings"].get("default_orient"),
                                   "per_row": d["settings"]["default_per_row"],
-                                  "disks": []}, h, auto=True, default_slots=dslots))
+                                  "disks": []}, h, auto=True, default_slots=dslots)
+        _apply_manual(sv["disks"], name, manual)
+        servers.append(_recount(sv))
     # hosts 文件里未建档的：占位（有 IP 无盘位）
     if include_hosts:
         for row in fetch_hosts():
             if row["name"] in seen or row["name"] in by_host:
                 continue
-            servers.append(_assemble(
+            sv = _assemble(
                 {"name": row["name"], "ip": row["ip"],
                  "mode": d["settings"].get("default_mode"),
                  "orient": d["settings"].get("default_orient"),
                  "per_row": d["settings"]["default_per_row"],
-                 "disks": [], "unbuilt": True}, None, auto=True, default_slots=dslots))
+                 "disks": [], "unbuilt": True}, None, auto=True, default_slots=dslots)
+            servers.append(_recount(sv))
     servers.sort(key=lambda x: x["name"])
     stats = {
         "servers": len(servers),
@@ -763,6 +771,57 @@ def _log_fields(ent) -> dict:
             "dclass": e.get("dclass", "")}
 
 
+def _recount(sv: dict) -> dict:
+    """按 sv['disks'] 的当前状态重算卡片级统计。
+
+    手工检测覆盖完单盘状态后要重算一遍，否则卡片头部的「N 异常」和徽章颜色
+    还是覆盖前的旧值。
+    """
+    disks_ = sv["disks"]
+    poll_errors = sv.get("poll_errors") or []
+    sv["bad"] = bad = sum(1 for x in disks_ if x["state"] == "err")
+    sv["unknown"] = unknown = sum(1 for x in disks_ if x["state"] == "warn")
+    sv["installed"] = sum(1 for x in disks_ if x["dev"] and x["slot"] is not None)
+    sv["installed_any"] = sum(1 for x in disks_ if x["dev"])
+    if bad:
+        sv["state"], sv["label"] = "err", f"{bad} 异常"
+    elif unknown or poll_errors or sv.get("unbuilt"):
+        sv["state"] = "warn"
+        sv["label"] = (f"{unknown} 未知" if unknown else
+                       ("未建档" if sv.get("unbuilt") else "轮询异常"))
+    else:
+        sv["state"], sv["label"] = ("ok", "全部健康") if disks_ else ("none", "")
+    return sv
+
+
+def _apply_manual(disks_: list, host: str, manual: dict) -> None:
+    """手工单盘检测的结果比日志里那条新时，用它覆盖状态。
+
+    osd.check.sh 单独跑的输出只落在终端，不进 VictoriaLogs，所以「右键检测完
+    刷新页面能看到新状态」只能靠这份本地记录。下一轮 poll 出了更新的记录后，
+    它自然被压过去。
+    """
+    mc = (manual or {}).get(host) or {}
+    for x in disks_:
+        m = mc.get(x.get("dev") or "")
+        if not m:
+            continue
+        if m.get("ts", 0) <= (x.get("_poll_ts") or 0):
+            continue
+        st = (m.get("status") or "").strip()
+        if m.get("issue") or st.startswith("✗"):
+            x["state"], x["label"] = "err", "异常"
+        elif st.startswith("⚠"):
+            x["state"], x["label"] = "warn", "警告"
+        elif st.startswith("✓"):
+            x["state"], x["label"] = "ok", "健康"
+        x["status"] = m.get("issue") or st
+        x["issues"] = [m["issue"]] if m.get("issue") else []
+        x["manual"] = int(m.get("ts", 0))
+        x["manual_at"] = time.strftime("%m-%d %H:%M", time.localtime(m.get("ts", 0)))
+        x["manual_status"] = st
+
+
 def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEFAULT_SLOTS) -> dict:
     """把一台服务器的布局与日志合并成渲染行。"""
     mode = _clamp_mode(s.get("mode"))
@@ -791,7 +850,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "issue": (ent or {}).get("issue", ""),
             "status": _status_text(ent),
             "issues": (ent or {}).get("issues", []),
-            "known": bool(ent),
+            "known": bool(ent), "_poll_ts": (ent or {}).get("ts", 0),
             "state": st, "label": _state_label(st, ent),
             "span": _span_of(dev, log_disks, per_row),
             **_log_fields(ent),
@@ -805,7 +864,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                       "attr": ent.get("attr", ""), "size": ent.get("size", ""),
                       "note": "", "issue": ent.get("issue", ""),
                       "status": _status_text(ent), "issues": ent.get("issues", []),
-                      "known": True, "unfiled": True,
+                      "known": True, "unfiled": True, "_poll_ts": ent.get("ts", 0),
                       "state": st, "label": _state_label(st, ent),
                       "span": _span_of(dev, log_disks, per_row), **_log_fields(ent)})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))

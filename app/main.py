@@ -20,6 +20,7 @@ from . import servers as srv
 from . import vecsync
 from . import collectors
 from . import disks
+from . import actions
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -439,6 +440,46 @@ def disks_save(request: Request, server: str = Form(""), per_row: int = Form(0),
         return RedirectResponse("/disks", status_code=303)
     disks.save_table(server, per_row, list(zip(slot, dev, osd, note, size)))
     return RedirectResponse(_disks_back(back), status_code=303)
+
+
+# ---------------- 单盘动作：检测 / LED 定位 ----------------
+# 这两个动作会在 PVE 节点上执行命令，只对管理员开放。
+# 目标 IP 由 actions.resolve_ip() 从 NAS hosts 清单解析，不接受网页传地址。
+@app.post("/disks/act")
+def disks_act(request: Request, server: str = Form(""), dev: str = Form(""),
+              act: str = Form(""), seconds: int = Form(0), back: str = Form(""),
+              csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    try:
+        job = actions.start(act, server, dev, seconds or actions.LED_SECONDS)
+    except actions.Rejected as e:
+        # 输入不合法：XHR 回错误，表单回跳（不把细节回显到页面）
+        if "json" in (request.headers.get("accept") or ""):
+            return {"id": "", "error": str(e)}
+        return RedirectResponse(_disks_back(back or server), status_code=303)
+    if "json" in (request.headers.get("accept") or ""):
+        return {"id": job["id"], "action": job["action"], "host": job["host"], "dev": job["dev"]}
+    return RedirectResponse(_disks_back(back or server), status_code=303)
+
+
+@app.get("/disks/act/{job_id}")
+def disks_act_poll(request: Request, job_id: str):
+    user = _require_user(request)
+    if not user:
+        return Response("Unauthorized", status_code=401)
+    if not user.get("is_admin"):
+        return Response("Forbidden", status_code=403)
+    j = actions.get(job_id)
+    if not j:
+        return {"state": "missing"}
+    return {"state": j["state"], "rc": j["rc"], "action": j["action"],
+            "host": j["host"], "dev": j["dev"], "cmd": j["cmd"],
+            "elapsed": round((j["ended"] or time.time()) - j["started"], 1),
+            "verdict": j.get("verdict"), "output": j.get("output", "")}
 
 
 # ---------------- 实时 tail (WebSocket) ----------------

@@ -289,6 +289,35 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .ordersave[hidden]{ display:none; }
 .ordersave button{ padding:3px 11px; font-size:12px; }
 
+/* 右键菜单（单盘动作） */
+.ctxmenu{ position:fixed; z-index:50; min-width:210px; padding:4px;
+          background:var(--surface); border:1px solid var(--border-light);
+          border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.45); }
+.ctxmenu[hidden]{ display:none; }
+.ctx-head{ padding:5px 9px 6px; border-bottom:1px solid var(--border); margin-bottom:4px;
+           display:flex; flex-direction:column; gap:1px; }
+.ctx-head b{ font-size:12px; color:var(--accent); }
+.ctxmenu button{ display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+                 width:100%; text-align:left; background:transparent; color:var(--text);
+                 padding:5px 9px; border-radius:6px; font-size:13px; font-weight:500; }
+.ctxmenu button:hover{ background:var(--surface2); color:var(--text); transform:none; }
+.ctxmenu button .meta{ font-size:10px; font-weight:400; }
+
+/* 动作输出面板 */
+.actmodal{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.55);
+           display:flex; align-items:center; justify-content:center; padding:24px; }
+.actmodal[hidden]{ display:none; }
+.actbox{ background:var(--surface); border:1px solid var(--border-light); border-radius:10px;
+         width:min(1000px,100%); max-height:88vh; display:flex; flex-direction:column; }
+.acthead{ display:flex; align-items:center; gap:10px; padding:10px 14px;
+          border-bottom:1px solid var(--border); }
+.actcmd{ padding:6px 14px; border-bottom:1px solid var(--border);
+         font-family:ui-monospace,monospace; font-size:11px; word-break:break-all; }
+.actout{ margin:0; padding:12px 14px; overflow:auto; flex:1; min-height:200px; max-height:62vh;
+         font-size:12px; line-height:1.5; white-space:pre-wrap; word-break:break-word;
+         background:var(--bg); color:var(--text2); }
+.actfoot{ padding:8px 14px; border-top:1px solid var(--border); }
+
 /* 状态徽章（绿=日志确认健康 / 黄=未知未验证 / 红=异常）：悬停看详情 */
 .sbadge{ display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600;
          line-height:1.5; padding:1px 7px; border-radius:999px; cursor:default;
