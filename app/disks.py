@@ -51,6 +51,8 @@ _SIZE_ONLY = re.compile(r'^\d+(?:\.\d+)?\s*[KMGT](?:i?B)?$', re.I)
 _MEDIA = ("SSD", "HDD", "NVME", "SSD-SATA", "SAS", "SATA")
 _CARRIER_RE = re.compile(r'^(RAID\d*|ZFS|LVM|MD\d*|JBOD|MIRROR|STRIPE)\b', re.I)
 _PSLOT_RE = re.compile(r'e(\d+)/s(\d+)')
+# RAID 括号里的成员表：RAID1(e252/s0+e252/s1) / RAID1(sg1+sg2) / RAID5(e252/s0+s1+s2)
+_RAID_MEMBERS_RE = re.compile(r'\(([^)]*)\)')
 # poll 里主机名后的括号有时不是 IP（本机轮询时是「本机」），别拿它当地址用
 _IPV4_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}$')
 
@@ -73,7 +75,8 @@ def parse_attr(attr: str) -> dict:
     返回 {size, media, carrier, pslots, role, dclass}，认不出的一律留空 ——
     老日志、格式微调都不会解析出错，只是少显示点东西。
     """
-    out = {"size": "", "media": "", "carrier": "", "pslots": [], "role": "", "dclass": ""}
+    out = {"size": "", "media": "", "carrier": "", "pslots": [], "role": "",
+           "dclass": "", "members": []}
     for raw in (attr or "").split("·"):
         p = raw.strip()
         if not p:
@@ -85,6 +88,12 @@ def parse_attr(attr: str) -> dict:
         elif _CARRIER_RE.match(p):
             out["carrier"] = p
             out["pslots"] = ["%s/%s" % (e, s) for e, s in _PSLOT_RE.findall(p)]
+            # 成员表按「+」拆 —— 不依赖 EID/Slt 写法。
+            # 实测 v5-ctr02 的 RAID1 成员写作 sg1+sg2（不是 e252/s0），
+            # 只认 EID/Slt 的话会把「两块盘的镜像」当成一块盘，盘位数少算。
+            mm = _RAID_MEMBERS_RE.search(p)
+            if mm:
+                out["members"] = [x.strip() for x in mm.group(1).split("+") if x.strip()]
         elif p.startswith("osd."):
             continue                        # OSD 号另有字段，不重复收
         elif "盘" in p:
@@ -689,6 +698,8 @@ def poll_logs() -> dict:
                 ent[k] = info[k]
         if info["pslots"]:
             ent["pslots"] = info["pslots"]
+        if info["members"]:
+            ent["members"] = info["members"]
         if not ent.get("size"):               # 括号里没有就从正文里抠一次
             for _ep, _tag, body, _o, _a, _ad in batch:
                 sz = parse_size(body)
@@ -845,7 +856,8 @@ def _span_of(dev: str, log_disks: dict, per_row: int = 0) -> int:
     视觉上占几列由 `place` 单独控制（见 _assemble）。
     """
     ent = (log_disks or {}).get((dev or "").strip()) or {}
-    return min(max(1, len(ent.get("pslots") or [])), SPAN_MAX)
+    n = max(len(ent.get("pslots") or []), len(ent.get("members") or []), 1)
+    return min(n, SPAN_MAX)
 
 
 def _pshort(pslots) -> str:
