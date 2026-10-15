@@ -195,12 +195,24 @@ def status() -> list:
 
 
 async def watchdog() -> None:
-    """常驻循环：探测 + 必要时自愈。异常不退出。"""
+    """常驻循环：探测 + 必要时自愈 + 定期清理磁盘档案。异常不退出。"""
+    last_prune = 0.0
     while True:
         try:
             badges = probe()
             _cache["badges"], _cache["ts"] = badges, time.time()
             heal(badges)
+            # 清掉已经拔掉的盘（清空格子、保留盘位，不动其它盘）。
+            # 放在这里而不是页面里，是为了不在 GET 里写文件；半小时判一次足够。
+            if time.time() - last_prune > 1800:
+                last_prune = time.time()
+                try:
+                    from . import disks as _d
+                    n = _d.prune_missing()
+                    if n:
+                        _log_heal(f"自动清理: {n} 块已不在机器上的盘（盘位保留）")
+                except Exception as e:
+                    _log_heal(f"清理磁盘档案异常: {e}")
         except Exception as e:
             _log_heal(f"watchdog 异常: {e}")
         await asyncio.sleep(CHECK_INTERVAL)

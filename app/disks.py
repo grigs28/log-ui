@@ -466,6 +466,48 @@ def _log_disks_of(name: str) -> dict:
     return (poll_logs()["by_host"].get((name or "").strip()) or {}).get("disks", {}) or {}
 
 
+def prune_missing() -> int:
+    """自动清掉「已经不在机器上」的盘。返回清理的盘数。
+
+    **只清空那一格的内容（dev/osd/note/size），保留它的盘位** ——
+    这样同机其它盘一个都不会移位（用户明确要求）。
+
+    两条判据都必须满足，避免误删：
+      ① 该主机**正在被轮询**：它最新那条盘记录不超过 HOST_ALIVE。
+         整机失联时绝不动手 —— 否则一台机器掉线就会把它的档案全清空。
+      ② 这块盘的记录比该主机最新记录早 GONE_AFTER 以上（即连续好几轮轮询
+         都没报它了）—— 说明它不在机器上了。
+
+    判据 ② 是**相对**主机自己最新记录的，不是绝对时间：
+    轮询停摆时所有盘一起变旧，`newest - ts ≈ 0`，不会有盘被判成「已拔掉」。
+
+    只覆盖「还在日志窗口内、但已经陈旧」的情况；日志滚过窗口之后彻底查不到的，
+    走「清理未上报」按钮手动清（那条路无法区分「拔掉了」和「手工录入的盘」）。
+    """
+    d = load()
+    log = poll_logs().get("by_host") or {}
+    now, changed = time.time(), 0
+    for s in d["servers"]:
+        lg = (log.get(s["name"]) or {}).get("disks") or {}
+        if not lg:
+            continue
+        newest = max((e.get("ts") or 0) for e in lg.values())
+        if not newest or now - newest > HOST_ALIVE:
+            continue                       # 整机没数据 → 不动手
+        for row in s["disks"]:
+            dev = (row.get("dev") or "").strip()
+            if not dev:
+                continue
+            ent = lg.get(dev)
+            if ent is not None and newest - (ent.get("ts") or 0) > GONE_AFTER:
+                # 清空这一格，盘位留着 —— 其它盘的位置一个不动
+                row.update({"dev": "", "osd": "", "note": "", "size": ""})
+                changed += 1
+    if changed:
+        save(d)
+    return changed
+
+
 def remove_missing(server: str) -> int:
     """删掉档案里「日志查不到记录」的盘。返回删除条数。
 
@@ -785,6 +827,10 @@ SPAN_MAX = 8               # 单个设备最多占几个物理盘位（RAID5/6 �
 # 小于这个容量的设备不当硬盘看。实测 m4-nod12 的 /dev/rbd0 只有 4M ——
 # Ceph RBD 的虚拟块设备，不是物理盘，混进盘位图毫无意义。
 MIN_SIZE_TB = 0.064       # 64G
+
+# 自动清理「已不在机器上」的盘（见 prune_missing）
+GONE_AFTER = 6 * 3600     # 相对该主机最新记录，超过这么久没上报 → 认为已拔掉
+HOST_ALIVE = 12 * 3600    # 该主机最新记录超过这么久没更新 → 整机失联，不动手
 
 
 def _span_of(dev: str, log_disks: dict, per_row: int = 0) -> int:
