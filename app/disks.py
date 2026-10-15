@@ -1023,13 +1023,19 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             row_end.add(id(row["cells"][-1]))
     flat = [x for row in rows for x in row["cells"]]
     for i, x in enumerate(flat):
-        nxt = flat[i + 1] if i + 1 < len(flat) else None
         if not x.get("dev"):
-            x["right_bar"] = False                      # 空槽自己不画
-        elif nxt is None or not nxt.get("dev"):
-            x["right_bar"] = True                       # ① 右边是空槽 / ③ 到尾
+            x["right_bar"] = False                      # 空槽自己不画灯带
+        elif per_row == 1:
+            # **竖排**：上下相邻，两条灯带是**上下接续**、不在同一个位置，
+            # 谁也不盖谁 —— 所以每格左右都画（「单盘 | HDD |」就是这个意思）。
+            x["right_bar"] = True
         else:
-            x["right_bar"] = id(x) in row_end and per_row > 1   # ② 横排换行处
+            # **横排**：左右相邻，中缝处「右边盘的左灯带」盖住「左边盘的右灯带」，
+            # 只留一条；只有下面三种情况才补自己的右灯带：
+            nxt = flat[i + 1] if i + 1 < len(flat) else None
+            x["right_bar"] = (nxt is None                     # ① 序列末尾（收尾）
+                              or not nxt.get("dev")           # ② 右边是空槽（盖不住）
+                              or id(x) in row_end)            # ③ 行末（换行处右边是空的）
     # 盘位数 = 机箱物理盘位总数（含空槽），日志发现的「未建档」行不算进机箱
     total_units = sum(x["span"] for x in framed)
     # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关。
