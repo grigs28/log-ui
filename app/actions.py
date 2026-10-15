@@ -33,7 +33,8 @@ W_SH = f"{GRIGS}/w.sh"
 #   /opt/grigs/w.sh ssh.run.sh <ip> -- "/opt/grigs/w.sh osd.check.sh <设备>"
 
 LED_SECONDS = 120          # 灯亮多久（网页触发，走 stdin 换行停）
-CHECK_TIMEOUT = 900        # 完整检测最长等（含测速，坏盘可能挂 90s+）
+CHECK_TIMEOUT = 900        # 单盘检测最长等（含测速，坏盘可能挂 90s+）
+HOST_CHECK_TIMEOUT = 2400  # 整机检测最长等（逐盘 SMART+测速，盘多/有坏盘时很慢）
 JOB_TTL = 3600             # 任务结果保留多久
 OUT_MAX = 200_000          # 输出截断上限
 
@@ -106,6 +107,10 @@ def _slots_of(host: str, dev: str) -> list:
 
 def build_remote(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> str:
     """构造在节点上执行的命令。所有插值都先过白名单校验。"""
+    # 整机动作没有设备参数，放在校验之前
+    if action == "check-host":
+        return f"{W_SH} osd.check.sh --all"        # 逐盘 SMART + 测速 + slow ops
+
     if not _DEV_RE.match(dev or ""):
         raise Rejected(f"设备名不合法: {dev!r}")
 
@@ -154,7 +159,9 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         remote = build_remote(action, host, dev, seconds)
         job["cmd"] = remote
 
-        timeout = CHECK_TIMEOUT if action == "check" else max(60, seconds + 90)
+        timeout = (HOST_CHECK_TIMEOUT if action == "check-host"
+                   else CHECK_TIMEOUT if action == "check"
+                   else max(60, seconds + 90))
         with _HOST_LOCKS_GUARD:
             hlock = _HOST_LOCKS.setdefault(host, threading.Lock())
         with hlock:
@@ -163,9 +170,16 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         with _LOCK:
             job["rc"] = p.returncode
             job["output"] = out[:OUT_MAX]
-            if action == "check":
-                job["verdict"] = _parse_verdict(out)
-                _save_manual_check(host, dev, job["verdict"], out)
+            if action in ("check", "check-host"):
+                if action == "check":
+                    job["verdict"] = _parse_verdict(out)
+                    _save_manual_check(host, dev, job["verdict"], out)
+                else:
+                    allv = _parse_all(out)          # {dev: {status, issue}}
+                    for d, v in allv.items():
+                        _save_manual_check(host, d, v, out)
+                    job["verdict"] = _summarize(allv)
+                    job["disks"] = allv
     except Rejected as e:
         with _LOCK:
             job["rc"] = -1
@@ -190,7 +204,7 @@ def start(action: str, host: str, dev: str, seconds: int = LED_SECONDS) -> dict:
     host = (host or "").strip()
     if not host:
         raise Rejected("缺少主机名")
-    if action not in ("check", "led-fail", "led-locate", "led-off"):
+    if action not in ("check", "check-host", "led-fail", "led-locate", "led-off"):
         raise Rejected(f"未知动作: {action!r}")
     build_remote(action, host, dev, seconds)      # 先校验，非法就当场拒绝
 
@@ -215,6 +229,53 @@ def _gc() -> None:
         for k in [k for k, v in JOBS.items()
                   if v.get("ended") and now - v["ended"] > JOB_TTL]:
             JOBS.pop(k, None)
+
+
+def _parse_all(out: str) -> dict:
+    """解析 `--all` 的整机输出 → {设备: {status, issue}}。
+
+    每块盘一段，段头是 `# 磁盘: /dev/sdX  [ 归属 ]`，段内的 `状态:` 行是结论。
+    注意不能拿裸 `状态:` 当锚点 —— 前面还有一行 `OSD 状态: osd.N = up`。
+    """
+    anchor = re.compile(r'磁盘:\s*(/dev/\S+)')
+    status = re.compile(r'状态:\s*([✓✗⚠][^\n]*)')
+    issue = re.compile(r'✗\s*(?!\s*SMART 状态)([^\n]+)')
+    res, cur, cur_issue = {}, None, ""
+    for raw in (out or "").splitlines():
+        line = re.sub(r'^\[[^\]]*\]\s*', '', raw.strip())
+        m = anchor.search(line)
+        if m:
+            cur, cur_issue = m.group(1), ""
+            continue
+        if cur is None:
+            continue
+        if not cur_issue:
+            i = issue.search(line)
+            if i:
+                cur_issue = i.group(0).strip()
+        sm = status.search(line)
+        if sm:
+            res[cur] = {"status": sm.group(1).strip(), "issue": cur_issue}
+            cur = None
+    return res
+
+
+def _summarize(allv: dict) -> dict:
+    """整机检测的汇总结论。"""
+    if not allv:
+        return {}
+    ok = sum(1 for v in allv.values() if v["status"].startswith("✓"))
+    warn = sum(1 for v in allv.values() if v["status"].startswith("⚠"))
+    err = sum(1 for v in allv.values() if v["status"].startswith("✗"))
+    parts = [f"{len(allv)} 块盘"]
+    if ok:
+        parts.append(f"✓ 健康 {ok}")
+    if err:
+        parts.append(f"✗ 异常 {err}")
+    if warn:
+        parts.append(f"⚠ 警告 {warn}")
+    return {"status": " · ".join(parts),
+            "issue": next((v["issue"] for v in allv.values() if v["issue"]), "")}
 
 
 def _parse_verdict(out: str) -> dict:

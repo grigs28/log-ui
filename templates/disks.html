@@ -125,6 +125,8 @@
          data-slots="{{ s.slots }}">{{ s.slots or (s.h_per_row * (s.h_rows or 3)) }}</b>
       <span class="meta">个</span>
       <button title="应用面板/盘向。总槽位数 = 每排 × 排数，已装盘的槽号不会被挤掉">应用</button>
+      <button type="button" class="btn-muted srv-act" data-act="check-host" data-server="{{ s.name }}"
+              title="重测整机：在这台机器上逐盘跑 SMART + 测速 + slow ops（盘多时可能几分钟）">重测整机</button>
     </form>
 
   </div>
@@ -360,7 +362,7 @@
       var ok = j.rc === 0;
       elState.textContent = (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
 
-      if (act === 'check') {
+      if (act === 'check' || act === 'check-host') {
         var v = j.verdict || {}, st = v.status || '';
         var cls = st.indexOf('✗') === 0 ? 'err' : (st.indexOf('⚠') === 0 ? 'warn' : (ok ? 'ok' : 'err'));
         bar(100, cls);
@@ -382,13 +384,16 @@
 
   function fire(act, server, dev, slots) {
     var cmd = act === 'check'
-      ? '/opt/grigs/osd/osd.check.sh ' + dev
+      ? '/opt/grigs/w.sh osd.check.sh ' + dev
+      : act === 'check-host'
+      ? '/opt/grigs/w.sh osd.check.sh --all'
       : (act === 'led-off'
-          ? "pkill -TERM -f 'osd\\.led\\.sh -f " + (slots || dev) + "'"
-          : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh '
-            + (act === 'led-fail' ? '-f ' : '') + (slots || dev));
-    var name = ({ check: '重测', 'led-fail': '亮灯', 'led-locate': '绿灯定位', 'led-off': '关灯' })[act] || act;
-    showOut(name + ' · ' + server + ' ' + dev, cmd);
+          ? "pkill -TERM -f 'osd\\.led\\.sh .*" + (slots || dev) + "'"
+          : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/w.sh osd.led.sh '
+            + (act === 'led-fail' ? '-f ' : '') + '-a ' + (slots || dev));
+    var name = ({ check: '重测', 'check-host': '重测整机', 'led-fail': '亮灯',
+                  'led-locate': '绿灯定位', 'led-off': '关灯' })[act] || act;
+    showOut(name + ' · ' + server + (dev ? ' ' + dev : ''), cmd);
 
     var f = new FormData();
     f.append('server', server); f.append('dev', dev); f.append('act', act); f.append('back', server);
@@ -408,15 +413,21 @@
     });
   }
 
+  // 盘位上的「重测/亮灯」和工具条里的「重测整机」共用这一条
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest && e.target.closest('.bay-act');
+    var btn = e.target.closest && e.target.closest('[data-act]');
     if (!btn) return;
+    var bay = btn.closest('.bay-live');
+    if (bay && bay.dataset.dev) {
+      ctx = { server: bay.closest('.baymap').dataset.server,
+              dev: bay.dataset.dev, slots: bay.dataset.slot || '' };
+    } else if (btn.dataset.server) {
+      ctx = { server: btn.dataset.server, dev: '', slots: '' };   // 整机
+    } else {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
-    var bay = btn.closest('.bay-live');
-    if (!bay || !bay.dataset.dev) return;
-    var map = bay.closest('.baymap');
-    ctx = { server: map.dataset.server, dev: bay.dataset.dev, slots: bay.dataset.slot || '' };
     fire(btn.dataset.act, ctx.server, ctx.dev, ctx.slots);
   }, true);
 
