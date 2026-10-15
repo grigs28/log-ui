@@ -199,6 +199,13 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 
 .bay-size{ color:var(--text2); font-weight:600; }
 .bay-empty{ color:var(--muted); font-style:italic; }
+
+/* 未归档盘位：日志里发现、还没落进机箱槽位的盘。虚线 + 品牌色，
+   一眼区分于「空槽」（空槽是灰虚线）。拖进任一空槽即落档。 */
+.bay-unfiled{ border:1px dashed var(--brand); background:color-mix(in srgb, var(--brand) 12%, transparent); }
+.bay-unfiled:hover{ border-color:var(--accent); background:color-mix(in srgb, var(--brand) 20%, transparent); }
+.bay-unfiled-mark{ font-size:10px; font-weight:700; color:var(--brand); letter-spacing:.5px; }
+.hint-unfiled b{ color:var(--brand); }
 .bay-live{ cursor:grab; user-select:none; -webkit-user-select:none; transition:outline-color .12s,opacity .12s; }
 .bay-live:hover{ border-color:var(--accent); }
 .bay-live.dragging{ opacity:.45; cursor:grabbing; outline:2px dashed var(--accent); outline-offset:1px; }

@@ -23,9 +23,11 @@ BASE = Path(__file__).resolve().parent.parent
 PATH = BASE / "config" / "disks.yaml"
 
 HOSTS_URL = "http://192.168.0.79/sxiad/grigs/hosts"
-DEFAULT_PER_ROW = 4
+DEFAULT_PER_ROW = 8           # 每排 8 个
+DEFAULT_SLOTS = 8             # 没建档的机器默认按 8 盘位画（比空面板有信息量）
 DEFAULT_ORIENT = "v"          # 盘向默认竖装（窄高格子，像机箱正面）
 PER_ROW_RANGE = (1, 24)
+SLOT_RANGE = (1, 200)
 
 # [盘点] /dev/sda[ 系统盘 ]  v5-ctr02(192.168.93.92)  osd.2 : ✓ 健康
 _POLL_RE = re.compile(
@@ -92,6 +94,7 @@ _LOGS_TTL = 120       # 日志解析缓存 2 分钟
 
 def _blank():
     return {"settings": {"default_per_row": DEFAULT_PER_ROW,
+                         "default_slots": DEFAULT_SLOTS,
                          "default_mode": "h",     # h=横排(多列) | v=竖排(一列)
                          "default_orient": "v",   # 盘向：v=竖装(窄高) | h=横装(宽扁)
                          "cell_label": "slot"},   # slot | dev
@@ -167,11 +170,19 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
     return d
 
 
-def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
+def _blank_layout(d: dict) -> list:
+    """没用档案时的默认盘位（默认 8 个空槽）。"""
+    n = max(1, int(d["settings"].get("default_slots") or DEFAULT_SLOTS))
+    return [{"slot": i, "dev": "", "osd": "", "note": ""} for i in range(n)]
+
+
+def _ensure(d: dict, name: str, ip: str = "", seed_slots: bool = False) -> dict | None:
     """取服务器档案；不存在就建一个。
 
-    视图设置和槽位数都是「针对这台机器」的操作，日志发现但未建档的机器点按钮
-    不该静默失败——顺手建档，用户不想要可以点「删档案」。
+    视图设置、槽位数、拖动排序都是「针对这台机器」的操作，日志发现但未建档的
+    机器不该静默失败——顺手建档，用户不想要可以点「删档案」。
+    seed_slots：建档时把面板上已经画出来的默认空槽位一并落档，否则「共 N 槽」
+    会从 8 跳成 0 再跳回来。
     """
     name = (name or "").strip()
     if not name:
@@ -182,7 +193,7 @@ def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
              "mode": _clamp_mode(d["settings"].get("default_mode")),
              "orient": _clamp_orient(d["settings"].get("default_orient")),
              "per_row": _clamp_per_row(d["settings"]["default_per_row"]),
-             "disks": []}
+             "disks": _blank_layout(d) if seed_slots else []}
         d["servers"].append(s)
     elif ip and not s.get("ip"):
         s["ip"] = ip.strip()
@@ -222,7 +233,7 @@ def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
         set_slot_count(server, pr * n, ip)
 
 
-def save_order(server: str, rows: list) -> int:
+def save_order(server: str, rows: list, ip: str = "") -> int:
     """按面板显示顺序重排盘位：槽号 = 视觉顺序号（0..N-1）。返回写入的盘位数。
 
     **不凭空扩容**：面板尾部那几块「日志发现的盘」跟着一起提交，若直接编号就会
@@ -232,7 +243,7 @@ def save_order(server: str, rows: list) -> int:
       · 盘数真的超过槽位数时才扩容
     """
     d = load()
-    s = get_server(d, (server or "").strip())
+    s = _ensure(d, server, ip, seed_slots=True)   # 未建档的机器拖动也要能生效
     if s is None or not rows:
         return 0
     declared = sum(1 for x in s["disks"] if x.get("slot") is not None)
@@ -342,10 +353,13 @@ def archive_unfiled(name: str) -> int:
     d = load()
     s = get_server(d, name)
     if s is None:
+        # 面板刚才是按默认盘位数画的，建档要落到同样的数，否则「共 N 槽」会跳变
         s = {"name": name, "ip": (poll_logs()["by_host"].get(name) or {}).get("ip", ""),
              "mode": _clamp_mode(d["settings"].get("default_mode")),
              "orient": _clamp_orient(d["settings"].get("default_orient")),
-             "per_row": d["settings"]["default_per_row"], "disks": []}
+             "per_row": d["settings"]["default_per_row"],
+             "disks": [{"slot": i, "dev": "", "osd": "", "note": ""}
+                       for i in range(max(1, int(d["settings"].get("default_slots") or DEFAULT_SLOTS)))]}
         d["servers"].append(s)
     have = {x.get("dev") for x in s["disks"] if x.get("dev")}
     # 空槽位（有槽号、没装盘）按槽号顺序待填
@@ -494,11 +508,12 @@ def merged(include_hosts: bool = True) -> dict:
     d = load()
     logs = poll_logs()
     by_host = logs["by_host"]
+    dslots = int(d["settings"].get("default_slots") or DEFAULT_SLOTS)
 
     servers = []
     seen = set()
     for s in d["servers"]:
-        servers.append(_assemble(s, by_host.get(s["name"])))
+        servers.append(_assemble(s, by_host.get(s["name"]), default_slots=dslots))
         seen.add(s["name"])
     # 日志里出现但布局中没有的主机：只读展示，提示「未建档」
     for name, h in sorted(by_host.items()):
@@ -508,7 +523,7 @@ def merged(include_hosts: bool = True) -> dict:
                                   "mode": d["settings"].get("default_mode"),
                                   "orient": d["settings"].get("default_orient"),
                                   "per_row": d["settings"]["default_per_row"],
-                                  "disks": []}, h, auto=True))
+                                  "disks": []}, h, auto=True, default_slots=dslots))
     # hosts 文件里未建档的：占位（有 IP 无盘位）
     if include_hosts:
         for row in fetch_hosts():
@@ -519,7 +534,7 @@ def merged(include_hosts: bool = True) -> dict:
                  "mode": d["settings"].get("default_mode"),
                  "orient": d["settings"].get("default_orient"),
                  "per_row": d["settings"]["default_per_row"],
-                 "disks": [], "unbuilt": True}, None, auto=True))
+                 "disks": [], "unbuilt": True}, None, auto=True, default_slots=dslots))
     servers.sort(key=lambda x: x["name"])
     stats = {
         "servers": len(servers),
@@ -543,16 +558,20 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
     return "warn" if has_dev else "none"
 
 
-def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
+def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEFAULT_SLOTS) -> dict:
     """把一台服务器的布局与日志合并成渲染行。"""
     mode = _clamp_mode(s.get("mode"))
     orient = _clamp_orient(s.get("orient") or DEFAULT_ORIENT)
     h_per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
     per_row = 1 if mode == "v" else h_per_row   # 竖排：一列；横排：多列
     log_disks = (log_h or {}).get("disks", {}) or {}
+    # 没建过档的机器：先按默认盘位数摆一排空槽位，比空面板有信息量，
+    # 也给了「日志发现的盘」一个可拖进去的目标。真实档案一旦存在就用档案。
+    layout = s.get("disks") or [{"slot": i, "dev": "", "osd": "", "note": ""}
+                                for i in range(max(1, int(default_slots or DEFAULT_SLOTS)))]
     disks = []
     used_devs = set()
-    for row in s.get("disks") or []:
+    for row in layout:
         dev = (row.get("dev") or "").strip()
         ent = log_disks.get(dev) if dev else None
         used_devs.add(dev)

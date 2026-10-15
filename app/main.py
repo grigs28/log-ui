@@ -397,7 +397,7 @@ def disks_view(request: Request, server: str = Form(""), mode: str = Form(""),
 @app.post("/disks/order")
 def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form([]),
                 osd: list[str] = Form([]), note: list[str] = Form([]),
-                size: list[str] = Form([]),
+                size: list[str] = Form([]), ip: str = Form(""),
                 csrf_ok: None = Depends(csrf_protect)):
     """拖动改面板显示位置 → 槽号按新顺序重排。"""
     user = _require_user(request)
@@ -405,7 +405,7 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
         return RedirectResponse("/auth/login", status_code=302)
     if not user.get("is_admin"):
         return RedirectResponse("/disks", status_code=303)
-    disks.save_order(server, list(zip(dev, osd, note, size)))
+    disks.save_order(server, list(zip(dev, osd, note, size)), ip)
     return RedirectResponse("/disks", status_code=303)
 
 
