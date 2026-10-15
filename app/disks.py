@@ -1003,13 +1003,6 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             out.append({"cells": cur, "used": used})
         return out, bay
 
-    # 右灯带：每条灯带挂它**右边**那块盘；右边如果是空位（或到头了），
-    # 没人盖住它 → 这块盘就把自己的右灯带按**自己的颜色**画出来。
-    flat_all = [x for x in disks if x["slot"] is not None] + [x for x in disks if x["slot"] is None]
-    for i, x in enumerate(flat_all):
-        nxt = flat_all[i + 1] if i + 1 < len(flat_all) else None
-        x["right_bar"] = bool(x.get("dev")) and (nxt is None or not nxt.get("dev"))
-
     framed = [x for x in disks if x["slot"] is not None]
     extra = [x for x in disks if x["slot"] is None]
     rows, nxt_bay = pack(framed)
@@ -1017,6 +1010,26 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     if extra:
         extra_rows, _ = pack(extra, bay0=nxt_bay)
         rows += extra_rows
+
+    # 右灯带：每条灯带挂它**右边**那块盘。右边没人盖住它时，这块盘就把自己的
+    # 右灯带按**自己的颜色**画出来。三种情况要补：
+    #   ① 这一排里右边是空槽   —— 空槽不画灯带，盖不住
+    #   ② 行末（横排）        —— 换行处右边就是空的；不补的话这排右边缘是秃的
+    #   ③ 最后一行的末格      —— 整条导轨的收尾
+    # 竖排每行只有一格，按 ② 补会变成「右条 + 缝 + 下格左条」的双线，所以排除。
+    row_end = set()
+    for row in rows:
+        if row["cells"]:
+            row_end.add(id(row["cells"][-1]))
+    flat = [x for row in rows for x in row["cells"]]
+    for i, x in enumerate(flat):
+        nxt = flat[i + 1] if i + 1 < len(flat) else None
+        if not x.get("dev"):
+            x["right_bar"] = False                      # 空槽自己不画
+        elif nxt is None or not nxt.get("dev"):
+            x["right_bar"] = True                       # ① 右边是空槽 / ③ 到尾
+        else:
+            x["right_bar"] = id(x) in row_end and per_row > 1   # ② 横排换行处
     # 盘位数 = 机箱物理盘位总数（含空槽），日志发现的「未建档」行不算进机箱
     total_units = sum(x["span"] for x in framed)
     # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关。
