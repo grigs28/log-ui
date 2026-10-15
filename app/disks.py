@@ -110,20 +110,24 @@ def _fmt_tb(v: float) -> str:
     return f"{v:.1f}T"
 
 
-def _is_real_issue(msg: str) -> bool:
-    """[异常] 行里哪些才算真异常（历史日志含大量误报，必须自行过滤）。
+def _severity(msg: str) -> str:
+    """一条 [异常] 行的严重度：'' = 不是问题 | 'warn' | 'err'。
 
-    不算异常的三类：
-      ✓ 开头  —— storcli 卡层「正常」指标（如「✓ 介质错误: 0」），值是 0 不是错
-      状态: 开头 —— generate_report 的结论行（明细另在别行），且新版权本就只进盘点
+    poll 的 [异常] 行里其实混了三类东西，只看「有没有 ✗」会大量误报：
+      ✓ 开头  —— storcli 卡层「正常」指标（「✓ 介质错误: 0」），值是 0 不是错
+      ⚠ 开头  —— 软性警告（「⚠ 其他错误: 6」「⚠ SMART 未知（跳过）」）
+      状态:开头 —— generate_report 的结论行，明细另在别行
+      ✗ 或无标记（「smartctl 安装失败」「命令失败」）—— 真异常
     """
     m = (msg or "").strip()
-    if m.startswith("✓"):
-        return False
-    if m.startswith("状态:"):
-        return False
-    return True
+    if m.startswith("✓") or m.startswith("状态:"):
+        return ""
+    if m.startswith("⚠"):
+        return "warn"
+    return "err"
 
+
+BURST_SLACK = 900      # 秒。同一块盘一次轮询内几条记录的最大间隔，远小于两轮间隔
 
 _hosts_cache = {"ts": 0.0, "rows": []}
 _logs_cache = {"ts": 0.0, "data": None}
@@ -487,58 +491,70 @@ def fetch_hosts() -> list:
 
 # ---------------- 日志（osd-poll：归属与状态） ----------------
 
-def poll_logs() -> dict:
-    """解析 osd-poll 日志 → {'dev': {dev: {...}}, 'host': {...}, 'runs': [...]}。
+def _epoch(ts: str):
+    """把盘行里的 'YYYY-MM-DD HH:MM:SS' 转成秒。解析不了返回 None。
 
-    返回结构：
-      by_host: {host: {'ip':.., 'disks': {dev: {'osd','attr','status','issue'}}}}
-      runs:    [{'ts','start','end','osds','hosts','issues','ok'}]（轮询记录）
+    用消息自带的时间戳而不是 _time —— 时间戳就在行里，且字符串形式本身
+    就按时间可排序，不依赖日志库返回的顺序或 _time 的格式。
+    """
+    try:
+        return time.mktime(time.strptime(ts, "%Y-%m-%d %H:%M:%S"))
+    except (ValueError, TypeError):
+        return None
+
+
+def poll_logs() -> dict:
+    """解析 osd-poll 日志 → {'by_host': {...}, 'runs': [...]}。
+
+    **每块盘只认它最近一次轮询的结果**（这是关键）：
+    轮询日志是流水，历史上坏过的盘会一直留在日志里。如果按「见过就记」累加，
+    一块盘上次报异常、这次盘点说健康，旧的 issue 会永远挂着 —— 永远不会恢复。
+    反过来只看 status 又会漏掉老格式的异常行。
+
+    所以先按 (主机, 设备) 归拢所有记录，再只保留**该盘时间戳最新那一批**的记录，
+    在这批里重新判定状态。同一块盘在一个批次里的记录（盘点行 + 若干异常行）
+    是解析循环里连着发的、时间戳几乎相同；而两轮轮询至少间隔几十分钟。
+
+      by_host: {host: {'ip','addr_note','disks': {dev: {...}}, 'poll_errors'}}
+      runs:    [{'ts','lines'}]（最近若干次轮询的 [开始]/[结束] 记录）
     """
     now = time.time()
     if _logs_cache["data"] is not None and now - _logs_cache["ts"] < _LOGS_TTL:
         return _logs_cache["data"]
 
     logs = vl.query_logs(expr="app_name:osd-poll", limit=2000)
-    by_host = {}
+
+    # (host, dev) → 该盘的全部记录；主机级失败另存
+    dev_events = {}          # key -> [(epoch, tag, body, osd, attr, addr)]
+    host_addr = {}           # host -> {'ip','addr_note'}
+    host_errors = {}         # host -> [(epoch, body)]
     runs = []
     cur = None
+
     for rec in logs:
         msg = rec.get("_msg") or ""
         m = _POLL_RE.match(msg)
         if m:
             host = m.group("host")
-            h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
             addr = (m.group("ip") or "").strip()
+            a = host_addr.setdefault(host, {})
             # 主机括号里可能是真 IP，也可能是「本机」（本机自轮询）——
             # 只认 IP 形态，免得把「本机」当地址覆盖掉真实 IP
             if _IPV4_RE.match(addr):
-                h["ip"] = addr
-            elif addr and not h.get("ip"):
-                h["addr_note"] = addr
-            dev = m.group("dev")
+                a["ip"] = addr
+            elif addr and not a.get("ip"):
+                a["addr_note"] = addr
+            ep = _epoch(m.group("ts"))
+            if ep is None:
+                continue
             body = _ANSI_RE.sub("", m.group("msg")).strip()
+            dev = m.group("dev")
             if dev == "/dev/?":
                 # 主机级失败（ssh/命令/无 IP），不是某块盘的问题
-                h["poll_errors"].append(body)
+                host_errors.setdefault(host, []).append((ep, body))
                 continue
-            ent = h["disks"].setdefault(dev, {})
-            ent["osd"] = m.group("osd") if m.group("osd") != "?" else ""
-            ent["attr"] = (m.group("attr") or "").strip()
-            info = parse_attr(ent["attr"])
-            for k in ("size", "media", "carrier", "role", "dclass"):
-                if info[k]:
-                    ent[k] = info[k]
-            if info["pslots"]:
-                ent["pslots"] = info["pslots"]
-            if not ent.get("size"):            # 括号里没有就从正文里抠一次
-                sz = parse_size(body)
-                if sz:
-                    ent["size"] = sz
-            if m.group("tag") == "异常":
-                if _is_real_issue(body):
-                    ent["issue"] = body
-            else:
-                ent["status"] = body
+            dev_events.setdefault((host, dev), []).append(
+                (ep, m.group("tag"), body, m.group("osd"), (m.group("attr") or "").strip(), addr))
             continue
         if "[开始]" in msg:
             cur = {"ts": rec.get("_time", ""), "lines": [msg.strip()]}
@@ -547,6 +563,53 @@ def poll_logs() -> dict:
             if cur is not None:
                 cur["lines"].append(msg.strip())
             cur = None
+
+    by_host = {}
+    for (host, dev), evs in dev_events.items():
+        newest = max(e[0] for e in evs)
+        # 只留最近一批：该盘最新记录往前 BURST_SLACK 秒内的
+        batch = sorted((e for e in evs if e[0] >= newest - BURST_SLACK), key=lambda e: e[0])
+        ent = {"osd": "", "attr": "", "status": "", "issue": "",
+               "issues": [], "warns": []}
+        seen = set()
+        for ep, tag, body, osd, attr, _addr in batch:
+            if tag == "异常":
+                sev = _severity(body)
+                if sev and body not in seen:
+                    seen.add(body)
+                    (ent["issues"] if sev == "err" else ent["warns"]).append(body)
+            else:
+                ent["status"] = body          # 同批内取最后一条盘点为准
+            if osd and osd != "?":
+                ent["osd"] = osd
+            if attr:
+                ent["attr"] = attr
+        info = parse_attr(ent["attr"])
+        for k in ("size", "media", "carrier", "role", "dclass"):
+            if info[k]:
+                ent[k] = info[k]
+        if info["pslots"]:
+            ent["pslots"] = info["pslots"]
+        if not ent.get("size"):               # 括号里没有就从正文里抠一次
+            for _ep, _tag, body, _o, _a, _ad in batch:
+                sz = parse_size(body)
+                if sz:
+                    ent["size"] = sz
+                    break
+        ent["issue"] = ent["issues"][0] if ent["issues"] else ""
+        ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
+        h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
+        h["disks"][dev] = ent
+
+    for host, a in host_addr.items():
+        h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
+        h.update(a)
+    for host, errs in host_errors.items():
+        h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
+        # 同样只留最近一批主机级失败
+        newest = max(e[0] for e in errs)
+        h["poll_errors"] = [b for ep, b in sorted(errs) if ep >= newest - BURST_SLACK]
+
     data = {"by_host": by_host, "runs": runs[:12]}
     _logs_cache["data"], _logs_cache["ts"] = data, now
     return data
@@ -597,16 +660,45 @@ def merged(include_hosts: bool = True) -> dict:
             "runs": logs["runs"], "stats": stats}
 
 
-# 状态 → (徽章类, 短标签)：绿=日志确认健康；红=有异常；黄=已录但日志无数据/未建档
+# 状态 → 短标签：绿=日志确认健康；红=有异常；黄=软性警告或日志无数据
 _STATE_LABEL = {"ok": "健康", "err": "异常", "warn": "未知", "none": ""}
 
 
+def _state_label(st: str, ent) -> str:
+    """黄灯有两种来源，标签分清楚：有 ⚠ 明细的是「警告」，没数据的是「未知」。"""
+    if st == "warn":
+        return "警告" if (ent or {}).get("warns") else "未知"
+    return _STATE_LABEL.get(st, "")
+
+
 def _disk_state(ent: dict, has_dev: bool) -> str:
-    if ent:
-        if ent.get("issue"):
-            return "err"
-        return "warn" if "⚠" in (ent.get("status") or "") else "ok"
+    """绿=确认健康 / 红=异常 / 黄=未知。
+
+    判据以**最近一次轮询**为准（poll_logs 已按盘归拢到最新一批）：
+      ✗ 或任何一条真异常 → 红
+      盘点正文里的 ⚠ → 黄
+      ✓ → 绿
+      有设备但日志没这条盘的记录 → 黄（未验证）
+    """
+    if not ent:
+        return "warn" if has_dev else "none"
+    s = (ent.get("status") or "").strip()
+    if ent.get("issue") or s.startswith("✗"):
+        return "err"                      # 有 ✗ 明细，或盘点结论就是 ✗
+    if ent.get("warns") or s.startswith("⚠") or "⚠" in s:
+        return "warn"                     # 只有软性警告 / SMART 未知
+    if s.startswith("✓"):
+        return "ok"
     return "warn" if has_dev else "none"
+
+
+def _status_text(ent) -> str:
+    """盘位显示的短状态：异常时给出主因，否则回显日志原文。"""
+    e = ent or {}
+    if e.get("issue"):
+        return e["issue"]
+    st = (e.get("status") or "").strip()
+    return st
 
 
 def _log_fields(ent) -> dict:
@@ -643,10 +735,10 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "size": (row.get("size") or "").strip() or (ent or {}).get("size", ""),
             "note": (row.get("note") or "").strip(),
             "issue": (ent or {}).get("issue", ""),
-            "status": ("异常" if (ent or {}).get("issue")
-                       else (ent or {}).get("status", "")),
+            "status": _status_text(ent),
+            "issues": (ent or {}).get("issues", []),
             "known": bool(ent),
-            "state": st, "label": _STATE_LABEL[st],
+            "state": st, "label": _state_label(st, ent),
             **_log_fields(ent),
         })
     # 日志里有、布局里没录的盘：自动补进图（提示未建档）
@@ -657,9 +749,9 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
         disks.append({"slot": None, "dev": dev, "osd": ent.get("osd", ""),
                       "attr": ent.get("attr", ""), "size": ent.get("size", ""),
                       "note": "", "issue": ent.get("issue", ""),
-                      "status": ("异常" if ent.get("issue") else ent.get("status", "")),
+                      "status": _status_text(ent), "issues": ent.get("issues", []),
                       "known": True, "unfiled": True,
-                      "state": st, "label": _STATE_LABEL[st], **_log_fields(ent)})
+                      "state": st, "label": _state_label(st, ent), **_log_fields(ent)})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))
     # 面板分行：每排 per_row 个
     framed = [x for x in disks if x["slot"] is not None]
