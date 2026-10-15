@@ -32,15 +32,15 @@
 
 {% for s in servers %}
 <div class="card" id="srv-{{ s.name }}" style="margin-bottom:14px">
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-    <b>{{ s.name }}</b>
+  <div class="srvhead">
+    <b class="srvname">{{ s.name }}</b>
     <span class="sbadge sbadge-{{ s.state }}"
           title="{{ s.name }}（{{ s.ip or s.addr_note or '无 IP' }}）&#10;机箱 {{ s.slots }} 槽：槽内已装 {{ s.installed }} · 空槽 {{ s.slots - s.installed }}{% if s.unfiled %}&#10;另有 {{ s.unfiled }} 块日志发现、未建档（不在槽内）{% endif %}&#10;{% if s.total_size %}合计容量 {{ s.total_size }}{% if s.size_known < s.installed_any %}（{{ s.size_known }}/{{ s.installed_any }} 块有容量数据）{% endif %}&#10;{% endif %}{% if s.media.SSD or s.media.HDD %}介质 SSD {{ s.media.SSD }} · HDD {{ s.media.HDD }}&#10;{% endif %}{% if s.sys_count %}系统盘 {{ s.sys_count }} 块&#10;{% endif %}异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
-    <span class="meta">{{ s.ip or s.addr_note or '无 IP' }}</span>
+    <span class="srvstat">{{ s.ip or s.addr_note or '无 IP' }}</span>
     {# 「共 N 槽」必须与工具条「总槽位数」同源（都只数有槽号的格子），
        未建档的日志发现盘单列，否则同一张卡片里两个槽数会对不上 #}
-    <span class="meta" title="左侧是设备数（一个 RAID1 设备算一个），右侧是机箱物理盘位数">
+    <span class="srvstat" title="左侧是设备数（一个 RAID1 设备算一个），右侧是机箱物理盘位数">
       {%- if s.slots -%}
         {{ s.installed_any }} 设备 / {{ s.slots }} 盘位
       {%- elif s.unfiled -%}
@@ -50,15 +50,15 @@
       {%- endif -%}
     </span>
     {% if s.phys and s.phys != s.installed_any %}
-    <span class="meta" title="实际物理硬盘块数 —— RAID1 镜像一个设备用两块盘，所以比设备数多">
+    <span class="srvstat" title="实际物理硬盘块数 —— RAID1 镜像一个设备用两块盘，所以比设备数多">
       物理盘 {{ s.phys }} 块
     </span>
     {% endif %}
     {% if s.total_size %}
-    <span class="meta" title="{% if s.size_known < s.installed_any %}仅统计已知容量的 {{ s.size_known }} / {{ s.installed_any }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
+    <span class="srvstat" title="{% if s.size_known < s.installed_any %}仅统计已知容量的 {{ s.size_known }} / {{ s.installed_any }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
     {% endif %}
     {% if s.media.SSD or s.media.HDD %}
-    <span class="meta" title="按介质统计已装盘的块数（来自日志的盘属性）">
+    <span class="srvstat" title="按介质统计已装盘的块数（来自日志的盘属性）">
       {%- if s.media.SSD %}<i class="media media-ssd">SSD</i> {{ s.media.SSD }}{% endif %}
       {%- if s.media.SSD and s.media.HDD %} · {% endif %}
       {%- if s.media.HDD %}<i class="media media-hdd">HDD</i> {{ s.media.HDD }}{% endif %}
@@ -69,7 +69,7 @@
           title="系统盘 —— 不要按普通 OSD 盘对待，拔之前先确认">系统盘 {{ s.sys_count }}</span>
     {% endif %}
     {% if s.classes %}
-    <span class="meta" title="Ceph 设备类（crush class）">类 {{ s.classes|join('/') }}</span>
+    <span class="srvstat" title="Ceph 设备类（crush class）">类 {{ s.classes|join('/') }}</span>
     {% endif %}
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     {% if s.unfiled and s.slots %}
@@ -123,14 +123,10 @@
          用户一动输入框就切换成「按每排 × 排数算出来的结果」 #}
       <b class="slot-count" data-per-row="{{ s.h_per_row }}" data-rows="{{ s.h_rows or 3 }}"
          data-slots="{{ s.slots }}">{{ s.slots or (s.h_per_row * (s.h_rows or 3)) }}</b>
-      <span class="meta">个（只读，由每排 × 排数决定）</span>
+      <span class="meta">个</span>
       <button title="应用面板/盘向。总槽位数 = 每排 × 排数，已装盘的槽号不会被挤掉">应用</button>
     </form>
 
-    <span class="meta">· 直接<b>拖动盘位</b>可改显示位置（保存后槽号按新顺序重排）</span>
-    {% if s.unfiled %}
-    <span class="meta hint-unfiled">· 右侧<b>虚线格子</b>是日志发现、还没归档的盘 —— 拖进空槽位即落档</span>
-    {% endif %}
   </div>
   {% endif %}
 
@@ -157,7 +153,12 @@
         </div>
         <div class="bay-osd">{% if d.osd %}osd.{{ d.osd }}{% endif %}</div>
         {% endif %}
-        {% if d.dev %}<button type="button" class="bay-menu" title="单盘检测 / 点灯">⋯</button>{% endif %}
+        {% if d.dev %}
+        <div class="bay-acts">
+          <button type="button" class="bay-act" data-act="check" title="重测：SMART + 测速 + slow ops">重测</button>
+          <button type="button" class="bay-act" data-act="led-fail" title="黄灯定位，便于机房找盘">亮灯</button>
+        </div>
+        {% endif %}
         {% if d.state != 'none' %}
         <span class="sbadge sbadge-{{ d.state }}">
           <span class="dot {{ d.state if d.state in ('ok','err','warn') else '' }}"></span><span class="sblabel">{{ d.label }}</span>
@@ -245,17 +246,6 @@
 </div>
 {% endif %}
 
-{# ---------- 右键菜单（单盘动作） ---------- #}
-<div id="ctxmenu" class="ctxmenu" hidden>
-  <div class="ctx-head"><b id="ctx-title">—</b><span class="meta" id="ctx-sub"></span></div>
-  {% if is_admin %}
-  <button type="button" data-act="check">单盘检测<span class="meta">SMART + 测速 + slow ops</span></button>
-  <button type="button" data-act="led-fail">黄灯定位<span class="meta">琥珀色，便于机房找盘</span></button>
-  <button type="button" data-act="led-locate">绿灯定位<span class="meta">高频闪，默认定位色</span></button>
-  {% endif %}
-  <button type="button" data-act="copy">复制命令<span class="meta">到节点上手动执行</span></button>
-</div>
-
 {# ---------- 动作输出面板 ---------- #}
 <div id="actmodal" class="actmodal" hidden>
   <div class="actbox">
@@ -275,52 +265,13 @@
 
 {% block scripts %}
 <script>
-/* ---- 右键单盘动作：检测 / LED 定位 ----
-   格子右键 → 菜单 → POST /disks/act 起后台任务 → 弹窗轮询 /disks/act/<id>。
-   检测要几十秒（含测速），所以不能同步等；黄灯默认亮 120 秒后自动灭。 */
+/* ---- 单盘动作：重测 / 亮灯 ----
+   格子上悬停出现两个按钮，点了直接起后台任务 → 弹窗轮询输出。
+   检测要几十秒（含测速），所以异步；亮灯是脱离式下发，1 秒返回、灯自己亮 120 秒。 */
 (function () {
-  var menu = document.getElementById('ctxmenu');
   var modal = document.getElementById('actmodal');
-  if (!menu || !modal) return;
-  var cur = null, timer = null;
-
-  function closeMenu() { menu.hidden = true; }
-
-  function openMenu(bay, x, y) {
-    cur = bay;
-    var slotEl = bay.querySelector('.bay-slot');
-    document.getElementById('ctx-title').textContent =
-      (bay.dataset.dev || '').replace('/dev/', '') + '  ·  ' + (bay.dataset.dev || '');
-    document.getElementById('ctx-sub').textContent =
-      '盘位 ' + (slotEl ? slotEl.textContent.trim() : '—') +
-      (bay.dataset.slot || bay.dataset.slots ? '  物理 ' + (bay.dataset.slot || bay.dataset.slots) : '');
-    menu.hidden = false;
-    var w = menu.offsetWidth, h = menu.offsetHeight;
-    menu.style.left = Math.max(4, Math.min(x, innerWidth - w - 8)) + 'px';
-    menu.style.top = Math.max(4, Math.min(y, innerHeight - h - 8)) + 'px';
-  }
-
-  document.addEventListener('contextmenu', function (e) {
-    var bay = e.target.closest && e.target.closest('.bay-live');
-    if (!bay || !bay.dataset.dev) return;
-    e.preventDefault();
-    openMenu(bay, e.clientX, e.clientY);
-  });
-
-  // 「⋯」按钮：有些访问方式（远程桌面/网页桥接）会吞掉右键，给一条备用入口
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest && e.target.closest('.bay-menu');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var bay = btn.closest('.bay-live');
-    if (!bay || !bay.dataset.dev) return;
-    var r = btn.getBoundingClientRect();
-    openMenu(bay, r.left, r.bottom + 4);
-  }, true);
-
-  document.addEventListener('click', closeMenu);
-  document.addEventListener('scroll', closeMenu, true);
+  if (!modal) return;
+  var timer = null;
 
   function showOut(title, cmd) {
     modal.hidden = false;
@@ -343,41 +294,32 @@
       if (j.state !== 'running') {
         clearInterval(timer);
         var ok = j.rc === 0;
-        document.getElementById('act-state').textContent = (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
+        document.getElementById('act-state').textContent =
+          (ok ? '✅ 完成 ' : '❌ 退出码 ' + j.rc + ' ') + j.elapsed + 's';
         var v = j.verdict || {};
-        document.getElementById('act-foot').textContent =
-          act === 'check'
-            ? ('结论：' + (v.status || '未解析到状态行') + '   刷新页面即可看到新状态')
-            : '灯已下发，将在节点上亮 120 秒后自动熄灭（可多块盘同时点）';
+        document.getElementById('act-foot').textContent = act === 'check'
+          ? ('结论：' + (v.status || '未解析到状态行') + '   刷新页面即可看到新状态')
+          : '灯已下发，将在节点上亮 120 秒后自动熄灭（可多块盘同时点）';
         if (act === 'check') setTimeout(function () { location.reload(); }, 2500);
       }
     }).catch(function () {});
   }
 
-  menu.addEventListener('click', function (e) {
-    var btn = e.target.closest('button[data-act]');
-    if (!btn || !cur) return;
-    var act = btn.dataset.act, dev = cur.dataset.dev;
-    var server = cur.closest('.baymap').dataset.server;
-    var title = ({ check: '单盘检测', 'led-fail': '黄灯定位', 'led-locate': '绿灯定位' })[act] || act;
-    closeMenu();
-
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.bay-act');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var bay = btn.closest('.bay-live');
+    if (!bay || !bay.dataset.dev) return;
+    var act = btn.dataset.act;
+    var dev = bay.dataset.dev;
+    var server = bay.closest('.baymap').dataset.server;
     var cmd = act === 'check'
       ? '/opt/grigs/osd/osd.check.sh ' + dev
-      : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh '
-        + (act === 'led-fail' ? '-f ' : '') + (cur.dataset.slots || dev);
+      : '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh -f ' + (bay.dataset.slot || dev);
+    showOut((act === 'check' ? '重测' : '亮灯') + ' · ' + server + ' ' + dev, cmd);
 
-    if (act === 'copy') {
-      var text = '/opt/grigs/w.sh ssh.run.sh <节点IP> -- "' +
-        (cur.dataset.slots
-          ? '{ sleep 120; echo; sleep 3600; } | /opt/grigs/osd/osd.led.sh -f ' + cur.dataset.slots
-          : '/opt/grigs/osd/osd.check.sh ' + dev) + '"';
-      if (navigator.clipboard) navigator.clipboard.writeText(text);
-      showOut('已复制命令（回到节点手动执行）', text);
-      return;
-    }
-
-    showOut(title + ' · ' + server + ' ' + dev, cmd);
     var f = new FormData();
     f.append('server', server); f.append('dev', dev); f.append('act', act); f.append('back', server);
     fetch('/disks/act', { method: 'POST', body: f, headers: { Accept: 'application/json' } })
@@ -390,158 +332,13 @@
       clearInterval(timer);
       timer = setInterval(function () { poll(j.id, act); }, 1000);
       poll(j.id, act);
-    }).catch(function (e) {
-      document.getElementById('act-out').textContent = '请求失败：' + e;
+    }).catch(function (err) {
+      document.getElementById('act-out').textContent = '请求失败：' + err;
     });
-  });
+  }, true);
 
   document.getElementById('act-close').addEventListener('click', function () {
     modal.hidden = true; clearInterval(timer);
-  });
-})();
-</script>
-<script>
-/* 提交后回到原来那张卡片。
-   页面上有 20 台服务器，点一次「应用」就滚回顶部的话得重新找，
-   所以服务端跳转带 ?focus=<服务器名>，这里滚过去并闪一下。
-   用 replaceState 把参数抹掉，免得刷新时又跳一次。 */
-(function () {
-  var p = new URLSearchParams(location.search);
-  var name = p.get('focus');
-  if (!name) return;
-  var el = document.getElementById('srv-' + name);
-  if (!el) return;
-  el.scrollIntoView({ block: 'start' });
-  el.classList.add('card-focus');
-  setTimeout(function () { el.classList.remove('card-focus'); }, 2400);
-  p.delete('focus');
-  var qs = p.toString();
-  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
-})();
-
-/* 拖动盘位改显示位置。落地后由「保存顺序」POST 给 /disks/order，
-   槽号按新的视觉顺序重排。空格子（.bay-vacant）只是补位，不参与拖动。 */
-/* ---- 每排 / 排数 / 总槽位数 三者的联动 ----
-   总槽位数是只读派生值。两个输入框分工不同，避免「改了一个却被另一个覆盖」：
-     改「每排」→ 保持总槽位数不变，排数自动重算（只改形状）
-     改「排数」→ 总槽位数跟着变（这才是在改机箱大小）           */
-(function () {
-  Array.prototype.forEach.call(document.querySelectorAll('.baytools form'), function (f) {
-    var per = f.querySelector('input[name="per_row"]');
-    var row = f.querySelector('input[name="rows"]');
-    var out = f.querySelector('.slot-count');
-    if (!per || !row || !out) return;
-
-    function total() { return (+per.value || 1) * (+row.value || 1); }
-    function paint() { out.textContent = total(); }
-
-    per.addEventListener('input', function () {
-      // 形状变了、机箱没变：排数倒推回同一个总槽位数
-      var want = +out.dataset.slots || (+out.dataset.rows * +out.dataset.perRow);  // 实际盘位数
-      if (want > 0 && +per.value > 0) {
-        row.value = Math.max(1, Math.ceil(want / (+per.value || 1)));
-      }
-      paint();
-    });
-    row.addEventListener('input', paint);
-    paint();
-  });
-})();
-
-(function () {
-  var dirty = {};      // server -> true
-
-  function saveBar(server) {
-    return document.querySelector('.ordersave[data-server="' + server + '"]');
-  }
-
-  function markDirty(server) {
-    if (dirty[server]) return;
-    dirty[server] = true;
-    var bar = saveBar(server);
-    if (bar) bar.hidden = false;
-  }
-
-  function resetDirty(server) {
-    dirty[server] = false;
-    var bar = saveBar(server);
-    if (bar) bar.hidden = true;
-  }
-
-  /* 交换两个元素在 DOM 中的位置（占位符法，相邻/不相邻都正确） */
-  function swap(a, b) {
-    var pa = a.parentNode, pb = b.parentNode;
-    var mark = document.createComment('');
-    pa.insertBefore(mark, a);
-    pb.insertBefore(a, b);
-    pa.insertBefore(b, mark);
-    pa.removeChild(mark);
-  }
-
-  Array.prototype.forEach.call(document.querySelectorAll('.baymap'), function (map) {
-    var server = map.dataset.server;
-
-    map.addEventListener('dragstart', function (e) {
-      var bay = e.target.closest && e.target.closest('.bay-live');
-      if (!bay) { e.preventDefault(); return; }
-      bay.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', bay.dataset.dev || ''); } catch (_) {}
-    });
-
-    map.addEventListener('dragend', function () {
-      var bay = map.querySelector('.bay-live.dragging');
-      if (bay) bay.classList.remove('dragging');
-      // 补位空格子统一挪到末尾，重排后最后一行依旧补齐
-      Array.prototype.forEach.call(map.querySelectorAll('.bay-vacant'), function (v) {
-        map.appendChild(v);
-      });
-    });
-
-    map.addEventListener('dragover', function (e) {
-      var drag = map.querySelector('.bay-live.dragging');
-      if (!drag) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      var over = e.target.closest && e.target.closest('.bay-live');
-      if (!over || over === drag || over.parentNode !== map) return;
-      swap(drag, over);
-      markDirty(server);
-    });
-
-    map.addEventListener('drop', function (e) { e.preventDefault(); });
-  });
-
-  /* 保存条按钮 */
-  Array.prototype.forEach.call(document.querySelectorAll('.ordersave'), function (bar) {
-    var server = bar.dataset.server;
-    bar.addEventListener('click', function (e) {
-      var act = e.target.dataset && e.target.dataset.act;
-      if (!act) return;
-      if (act === 'reset') { location.reload(); return; }
-      var map = document.querySelector('.baymap[data-server="' + server + '"]');
-      if (!map) return;
-      var f = document.createElement('form');
-      f.method = 'post';
-      f.action = '/disks/order';
-      function add(name, val) {
-        var i = document.createElement('input');
-        i.type = 'hidden'; i.name = name; i.value = val;
-        f.appendChild(i);
-      }
-      add('server', server);
-      add('ip', map.dataset.ip || '');
-      add('back', server);
-      Array.prototype.forEach.call(map.querySelectorAll('.bay-live'), function (b) {
-        add('dev', b.dataset.dev || '');
-        add('osd', b.dataset.osd || '');
-        add('note', b.dataset.note || '');
-        add('size', b.dataset.size || '');
-      });
-      document.body.appendChild(f);
-      resetDirty(server);
-      f.submit();
-    });
   });
 })();
 </script>
