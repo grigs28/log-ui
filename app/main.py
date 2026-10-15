@@ -444,6 +444,19 @@ def disks_order(request: Request, server: str = Form(""), dev: list[str] = Form(
 # 后端函数 set_slot_count() 保留，供 set_view 调用。
 
 
+@app.post("/disks/clean")
+def disks_clean(request: Request, server: str = Form(""), back: str = Form(""),
+                csrf_ok: None = Depends(csrf_protect)):
+    """删掉档案里「日志查不到记录」的盘（多半是拔掉了）。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    if not user.get("is_admin"):
+        return RedirectResponse("/disks", status_code=303)
+    disks.remove_missing(server)
+    return RedirectResponse(_disks_back(back or server), status_code=303)
+
+
 @app.post("/disks/save")
 def disks_save(request: Request, server: str = Form(""), per_row: int = Form(0),
                slot: list[str] = Form([]), dev: list[str] = Form([]),

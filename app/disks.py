@@ -466,6 +466,27 @@ def _log_disks_of(name: str) -> dict:
     return (poll_logs()["by_host"].get((name or "").strip()) or {}).get("disks", {}) or {}
 
 
+def remove_missing(server: str) -> int:
+    """删掉档案里「日志查不到记录」的盘。返回删除条数。
+
+    典型场景：坏盘拔掉后，档案里那条还在、盘位图照旧显示它。
+    档案是用户排好的布局，不自动改 —— 要清得显式点一下。
+    """
+    d = load()
+    s = get_server(d, (server or "").strip())
+    if s is None:
+        return 0
+    log_disks = _log_disks_of(s["name"])
+    keep = [x for x in s["disks"]
+            if not (x.get("dev") or "").strip() or (x.get("dev") or "") in log_disks]
+    n = len(s["disks"]) - len(keep)
+    if n:
+        s["disks"] = keep
+        _renumber(s, log_disks, _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW))
+        save(d)
+    return n
+
+
 def set_slot_count(server: str, count, ip: str = "") -> int:
     """声明机箱**物理盘位数**：面板显示 0..count-1 号盘位，装了几块亮几块。
 
@@ -717,9 +738,15 @@ _STATE_LABEL = {"ok": "健康", "err": "异常", "warn": "未知", "none": ""}
 
 
 def _state_label(st: str, ent) -> str:
-    """黄灯有两种来源，标签分清楚：有 ⚠ 明细的是「警告」，没数据的是「未知」。"""
+    """黄灯的三种来源，标签分清楚：
+       有 ⚠ 明细   → 警告
+       日志里查不到该盘 → 无记录（盘可能已拔掉，或设备名变了）
+       其它         → 未知
+    """
     if st == "warn":
-        return "警告" if (ent or {}).get("warns") else "未知"
+        if (ent or {}).get("warns"):
+            return "警告"
+        return "未知" if ent else "无记录"
     return _STATE_LABEL.get(st, "")
 
 
@@ -941,6 +968,8 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     else:
         st, label = ("ok", "全部健康") if disks else ("none", "")
     # 容量合计：只累加认得出来的（1.8T / 894G / 400GiB …），认不出的跳过
+    # 档案里有、日志里查不到记录的盘（多半是拔掉了，或设备名变了）
+    missing = [x["dev"] for x in disks if x["dev"] and not x["known"] and x["slot"] is not None]
     sizes = [size_tb(x["size"]) for x in disks if x["dev"]]
     known = [v for v in sizes if v is not None]
     total = _fmt_tb(sum(known)) if known else ""
@@ -968,6 +997,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "installed_any": sum(1 for x in disks if x["dev"]),
             "size_known": len(known), "total_size": total,
             "ignored": [{"dev": d, "size": z} for d, z in sorted(small.items())],
+            "missing": missing,
             "media": media, "sys_count": sysn, "classes": classes,
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,

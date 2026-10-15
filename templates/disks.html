@@ -133,6 +133,16 @@
               title="重测整机：在这台机器上逐盘跑 SMART + 测速 + slow ops（盘多时可能几分钟）">重测整机</button>
     </form>
 
+    {% if s.missing %}
+    <form method="post" action="/disks/clean" style="display:inline;margin:0"
+          onsubmit="return confirm('从档案里删掉这 {{ s.missing|length }} 块「日志查不到记录」的盘？&#10;{{ s.missing|join('、') }}&#10;&#10;多半是已经拔掉了；若是设备名变了，删掉后重新建档即可')">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="back" value="{{ s.name }}">
+      <button class="btn-muted" style="padding:3px 11px;font-size:12px"
+              title="档案里这些盘在日志里已查不到记录 —— 多半是拔掉了。点一下从档案里清掉">清理未上报 {{ s.missing|length }}</button>
+    </form>
+    {% endif %}
+
   </div>
   {% endif %}
 
