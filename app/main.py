@@ -84,10 +84,26 @@ def favicon():
     return Response(status_code=204)
 
 
+_watchdog_task = None
+
+
 @app.on_event("startup")
 async def _start_watchdog():
-    import asyncio
-    asyncio.create_task(collectors.watchdog())
+    global _watchdog_task
+    _watchdog_task = asyncio.create_task(collectors.watchdog())
+
+
+@app.on_event("shutdown")
+async def _stop_watchdog():
+    """必须显式取消 watchdog —— 它是 while True 常驻任务，不取消会让 uvicorn
+    关停时一直「Waiting for background tasks to complete」，systemd 只能等
+    TimeoutStopSec 超时后强杀（2026-10-15 实测：restart 卡在 deactivating 90s+）。"""
+    if _watchdog_task and not _watchdog_task.done():
+        _watchdog_task.cancel()
+        try:
+            await _watchdog_task
+        except asyncio.CancelledError:
+            pass
 
 
 # 注入全局模板变量（版本号）

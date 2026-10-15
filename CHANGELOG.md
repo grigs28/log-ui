@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [0.7.1] - 2026-10-15
+
+### Fixed
+- **watchdog 阻塞 log-ui 关停**（v0.5.5 引入，长期存在）：`collectors.watchdog()` 是
+  `while True` 常驻任务，当初只注册了 startup、未在 shutdown 取消它 —— uvicorn 关停时
+  一直「Waiting for background tasks to complete」，systemd 只能等 TimeoutStopSec
+  超时强杀。**实测 `systemctl restart log-ui` 从卡 90s+ 降到 2 秒**
+- **磁盘状态误判**：`osd-poll` 历史日志里 `✓ 介质错误: 0`、`✓ 其他错误: 0` 是 storcli
+  **卡层正常指标**（值为 0），`状态: ✗ 异常` 是**结论行**，`/dev/?` 是**主机级命令失败**
+  —— 三者都被旧解析器当成盘级异常，导致「33 盘全部异常」的假象。
+  现按前缀过滤（`✓`/`状态:` 不算异常），`/dev/?` 归入主机级「轮询异常」。
+  **实测：34 假异常 → 13 真异常**（`✗ 重映射扇区: 23 (存在坏块!)`、
+  `✗ 增长缺陷列表: 756`、`✗ 介质错误: 23`、`✗ 速度极慢`）
+- ANSI 色码清洗：日志管道吃掉 ESC 后残留的 `#033[0;31m` 形式一并剥除
+
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

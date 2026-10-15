@@ -35,6 +35,25 @@ _POLL_RE = re.compile(
     r'osd\.(?P<osd>[^\s]+)\s+:\s+(?P<msg>.*)$'
 )
 
+# 日志里的 ANSI 色码：真实 ESC 形式 或 被日志管道吃掉 ESC 后残留的 "#033[0;31m"
+_ANSI_RE = re.compile(r'(?:\x1b|#033)?\[\d+(?:;\d+)*m')
+
+
+def _is_real_issue(msg: str) -> bool:
+    """[异常] 行里哪些才算真异常（历史日志含大量误报，必须自行过滤）。
+
+    不算异常的三类：
+      ✓ 开头  —— storcli 卡层「正常」指标（如「✓ 介质错误: 0」），值是 0 不是错
+      状态: 开头 —— generate_report 的结论行（明细另在别行），且新版权本就只进盘点
+    """
+    m = (msg or "").strip()
+    if m.startswith("✓"):
+        return False
+    if m.startswith("状态:"):
+        return False
+    return True
+
+
 _hosts_cache = {"ts": 0.0, "rows": []}
 _logs_cache = {"ts": 0.0, "data": None}
 _HOSTS_TTL = 600      # hosts 文件缓存 10 分钟
@@ -235,18 +254,24 @@ def poll_logs() -> dict:
         m = _POLL_RE.match(msg)
         if m:
             host = m.group("host")
-            h = by_host.setdefault(host, {"ip": m.group("ip"), "disks": {}})
+            h = by_host.setdefault(host, {"ip": m.group("ip"), "disks": {},
+                                          "poll_errors": []})
             if m.group("ip"):
                 h["ip"] = m.group("ip")
             dev = m.group("dev")
+            body = _ANSI_RE.sub("", m.group("msg")).strip()
+            if dev == "/dev/?":
+                # 主机级失败（ssh/命令/无 IP），不是某块盘的问题
+                h["poll_errors"].append(body)
+                continue
             ent = h["disks"].setdefault(dev, {})
             ent["osd"] = m.group("osd") if m.group("osd") != "?" else ""
             ent["attr"] = (m.group("attr") or "").strip()
             if m.group("tag") == "异常":
-                ent["issue"] = m.group("msg").strip()
-                # 结论行「✗ 异常」不算详情，仍以是否有 issue 判异常
+                if _is_real_issue(body):
+                    ent["issue"] = body
             else:
-                ent["status"] = m.group("msg").strip()
+                ent["status"] = body
             continue
         if "[开始]" in msg:
             cur = {"ts": rec.get("_time", ""), "lines": [msg.strip()]}
@@ -354,16 +379,18 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
         rows.append(extra)
     bad = sum(1 for x in disks if x["state"] == "err")
     unknown = sum(1 for x in disks if x["state"] == "warn")
+    poll_errors = list((log_h or {}).get("poll_errors") or [])
     if bad:
-        st = "err"
-    elif unknown or s.get("unbuilt"):
+        st, label = "err", f"{bad} 异常"
+    elif unknown or poll_errors or s.get("unbuilt"):
         st = "warn"
+        label = (f"{unknown} 未知" if unknown else
+                 ("未建档" if s.get("unbuilt") else "轮询异常"))
     else:
-        st = "ok" if disks else "none"
+        st, label = ("ok", "全部健康") if disks else ("none", "")
     return {"name": s["name"], "ip": (s.get("ip") or (log_h or {}).get("ip", "")),
             "per_row": per_row, "rows": rows, "disks": disks,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
             "count": len(disks), "bad": bad, "unknown": unknown,
-            "state": st,
-            "label": f"{bad} 异常" if bad else (f"{unknown} 未知" if unknown else
-                                               ("未建档" if s.get("unbuilt") else "全部健康"))}
+            "poll_errors": poll_errors,
+            "state": st, "label": label}

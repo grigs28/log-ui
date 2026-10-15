@@ -46,7 +46,7 @@
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
     <b>{{ s.name }}</b>
     <span class="sbadge sbadge-{{ s.state }}"
-          title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;共 {{ s.count }} 盘 · 异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}">
+          title="{{ s.name }}（{{ s.ip or '无 IP' }}）&#10;共 {{ s.count }} 盘 · 异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
     <span class="meta">{{ s.ip or '无 IP' }}</span>
     <span class="meta">{{ s.count }} 盘</span>
