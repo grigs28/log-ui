@@ -7,6 +7,12 @@
 ### Changed
 - 「磁盘」tab：镜像盘（RAID1）的框由紫系改为**蓝框**，与状态色（红/黄/绿）区分更清楚
 
+### Fixed
+- 「磁盘」tab：**镜像盘看着只占 1 格** —— `grid-column:span 2` 其实生效了（网格划出
+  2 列 = 130px），但 `.bay` 上有显式 `width:62px`，而网格项一旦有显式宽度就不再
+  拉伸（`justify-self:stretch` 只对 `width:auto` 生效），于是元素仍是 62px 靠左放，
+  右边空出 68px。现在 `.baymap .bay-span{ width:auto }` 让它撑满所占区域
+
 ## [1.1.0] - 2026-10-15
 
 ### Added

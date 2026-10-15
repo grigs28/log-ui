@@ -184,6 +184,12 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .baymap.orient-v{ --bay-w:62px;  --bay-h:148px; }
 .baymap.orient-h{ --bay-w:236px; --bay-h:62px;  }
 
+/* 跨格的格子要撑满它占的网格区域。
+   注意 .bay 上有显式 width，网格项一旦有显式宽度就不再拉伸
+   （justify-self:stretch 只对 width:auto 生效），所以必须显式放开，
+   否则元素划了 2 列却只有 62px 宽、靠左放，看着还是一格。 */
+.baymap .bay-span{ width:auto; }
+
 .bay{ position:relative; width:var(--bay-w,106px); height:var(--bay-h,80px);
       border:1px solid var(--border-light); border-radius:6px;
       background:var(--surface2); padding:4px 3px; text-align:center;
