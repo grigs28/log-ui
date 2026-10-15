@@ -342,12 +342,14 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .bay-err{  --led: var(--led-err);
            background-color:color-mix(in srgb, var(--led-err) 9%, var(--panel)); }
 .bay-err .bay-slot{ color:var(--led-err); }
-/* 空槽也是一格：灯条在，只是**灭**（暗色、不发光）——
-   这样整排灯条是连续的一条导轨，一眼看出「6 块盘后面还有 2 个空位」 */
-.bay-none{ --led: var(--led-off); background-color:var(--panel-2); }
-.bay-none::before, .bay-none::after{ box-shadow:none; }
+/* 空盘位**不画灯带** —— 所以它盖不住相邻那块盘的右灯带
+   （相邻盘的右灯带会按自己的颜色露出来，见 .bay-end） */
+.bay-none{ background-color:var(--panel-2); }
+/* 提权到 .baymap 一级：否则会被后面的 .bay-live::before 盖回来 */
+.baymap .bay-none::before, .baymap .bay-none::after,
+.baymap .bay-vacant::before, .baymap .bay-vacant::after{ content:none; }
 .bay-none .bay-dev{ color:var(--ink-3); }
-.bay-vacant{ --led: transparent; background-color:transparent; }
+.bay-vacant{ background-color:transparent; }
 /* 灯条的辉光：单独一层，避免和背景渐变打架 */
 .bay-live::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:2px;
                    background:var(--led); box-shadow:0 0 8px -1px var(--led); }
@@ -360,7 +362,7 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
     linear-gradient(90deg, transparent calc(100% - 2px), var(--led) calc(100% - 2px)); }
 .bay-end::after{ content:''; position:absolute; right:0; top:0; bottom:0; width:2px;
                  background:var(--led); box-shadow:0 0 8px -1px var(--led); }
-.bay-end.bay-none::after{ box-shadow:none; }
+
 
 /* 竖排每排只有 1 列，跨格只能竖着来：占 N 行、高度交给网格拉伸 */
 .baymap.mode-v{ grid-auto-rows:minmax(var(--bay-h,80px), auto); }
@@ -368,29 +370,8 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 /* .bay 上有显式 width，网格项一旦有显式宽度就不再拉伸
    （justify-self:stretch 只对 width:auto 生效），跨格必须显式放开 */
 .baymap .bay-hspan, .baymap .bay-vspan{ width:auto; }
-/* 跨格的镜像对（RAID1 一块设备占两个物理盘位）：**中缝再画一条灯**，
-   位置就是「第二块盘的左边缘」—— 一眼看出它是两块盘贴在一起。
-   两块盘共用同一个设备状态，所以中缝与左右必然同色（poll 不按物理槽位分状态）。 */
-.bay-hspan{
-  background-image:
-    linear-gradient(90deg, var(--led) 0 2px, transparent 2px),
-    linear-gradient(90deg, transparent calc(50% - 1px), var(--led) calc(50% - 1px) calc(50% + 1px),
-                              transparent calc(50% + 1px));
-}
-.bay-vspan{
-  background-image:
-    linear-gradient(90deg, var(--led) 0 2px, transparent 2px),
-    linear-gradient(180deg, transparent calc(50% - 1px), var(--led) calc(50% - 1px) calc(50% + 1px),
-                               transparent calc(50% + 1px));
-}
-/* 跨格 + 行末：三层叠加（左 / 中缝 / 右） */
-.bay-hspan.bay-end{
-  background-image:
-    linear-gradient(90deg, var(--led) 0 2px, transparent 2px),
-    linear-gradient(90deg, transparent calc(50% - 1px), var(--led) calc(50% - 1px) calc(50% + 1px),
-                              transparent calc(50% + 1px)),
-    linear-gradient(90deg, transparent calc(100% - 2px), var(--led) calc(100% - 2px));
-}
+/* 跨格的 RAID 设备：**不画中间灯带**（一个设备就是一段，不做内部分隔）。
+   占位关系仍按 .bay-end 处理 —— 它右边若是空位，自己的右灯带照常露出来。 */
 
 /* 未归档（日志发现、还没落进槽位）：左边一条虚线灯带 + 定位灯蓝 */
 .bay-unfiled{ --led: var(--led-loc);

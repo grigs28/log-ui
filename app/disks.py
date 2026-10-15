@@ -1003,6 +1003,13 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             out.append({"cells": cur, "used": used})
         return out, bay
 
+    # 右灯带：每条灯带挂它**右边**那块盘；右边如果是空位（或到头了），
+    # 没人盖住它 → 这块盘就把自己的右灯带按**自己的颜色**画出来。
+    flat_all = [x for x in disks if x["slot"] is not None] + [x for x in disks if x["slot"] is None]
+    for i, x in enumerate(flat_all):
+        nxt = flat_all[i + 1] if i + 1 < len(flat_all) else None
+        x["right_bar"] = bool(x.get("dev")) and (nxt is None or not nxt.get("dev"))
+
     framed = [x for x in disks if x["slot"] is not None]
     extra = [x for x in disks if x["slot"] is None]
     rows, nxt_bay = pack(framed)
