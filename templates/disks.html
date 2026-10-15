@@ -137,6 +137,7 @@
       <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}{% if d.span > 1 %} bay-span{% endif %}" draggable="true"
            {% if d.span > 1 %}style="grid-column:span {{ d.span }}"{% endif %}
            data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
+           data-span="{{ d.span }}"
            {%- if d.dev %} data-slot{{ 's' if d.pslots|length > 1 else '' }}="{{ d.pshort }}"{% endif %}
            title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} —— 物理槽位 {{ d.pshort }}（{{ d.span }} 块盘）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}{% if d.manual %}&#10;⚑ 手工检测于 {{ d.manual_at }}（状态取自检测结果，非轮询）{% endif %}&#10;（拖动可调整位置；鼠标停在格子上，底部出现「重测」「亮灯」）">
         <div class="bay-slot">{% if d.slot is none %}<span class="bay-unfiled-mark">未归档</span>{% elif d.span > 1 %}{{ d.bay }}-{{ d.bay + d.span - 1 }}{% else %}{{ d.bay }}{% endif %}</div>
@@ -505,6 +506,26 @@
     if (bar) bar.hidden = true;
   }
 
+  /* 按**位置**重排格子上的槽号。
+
+     槽号 = 物理盘位，由顺序决定（镜像盘占 2 个）。所以拖动时号应该跟着**位置**走，
+     不是跟着**盘**走 —— 否则把 sdf 拖到 sda 的位置，格子上还印着各自的旧号，
+     看着像整个盘位图都乱了。这里按 DOM 顺序按 span 累加重写。
+     未归档的格子不占机箱盘位，跳过。 */
+  function renumber(map) {
+    var pos = 0;
+    Array.prototype.forEach.call(map.querySelectorAll('.bay-live'), function (b) {
+      if (b.classList.contains('bay-unfiled')) return;
+      var span = +b.dataset.span || 1;
+      var label = pos + (span > 1 ? '-' + (pos + span - 1) : '');
+      var slotEl = b.querySelector('.bay-slot');
+      if (slotEl) slotEl.textContent = label;
+      var t = b.getAttribute('title');
+      if (t) b.setAttribute('title', t.replace(/^槽 [^·\n]+/, '槽 ' + label + ' '));
+      pos += span;
+    });
+  }
+
   /* 交换两个元素在 DOM 中的位置（占位符法，相邻/不相邻都正确） */
   function swap(a, b) {
     var pa = a.parentNode, pb = b.parentNode;
@@ -533,6 +554,7 @@
       Array.prototype.forEach.call(map.querySelectorAll('.bay-vacant'), function (v) {
         map.appendChild(v);
       });
+      renumber(map);
     });
 
     map.addEventListener('dragover', function (e) {
@@ -543,6 +565,7 @@
       var over = e.target.closest && e.target.closest('.bay-live');
       if (!over || over === drag || over.parentNode !== map) return;
       swap(drag, over);
+      renumber(map);                 // 号跟着位置走，所见即所得
       markDirty(server);
     });
 
