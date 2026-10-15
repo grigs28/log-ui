@@ -24,6 +24,7 @@ PATH = BASE / "config" / "disks.yaml"
 
 HOSTS_URL = "http://192.168.0.79/sxiad/grigs/hosts"
 DEFAULT_PER_ROW = 4
+DEFAULT_ORIENT = "v"          # 盘向默认竖装（窄高格子，像机箱正面）
 PER_ROW_RANGE = (1, 24)
 
 # [盘点] /dev/sda[ 系统盘 ]  v5-ctr02(192.168.93.92)  osd.2 : ✓ 健康
@@ -37,6 +38,33 @@ _POLL_RE = re.compile(
 
 # 日志里的 ANSI 色码：真实 ESC 形式 或 被日志管道吃掉 ESC 后残留的 "#033[0;31m"
 _ANSI_RE = re.compile(r'(?:\x1b|#033)?\[\d+(?:;\d+)*m')
+
+# 容量：1.8T / 1.82TB / 894G / 400GiB —— 必须带单位字母，避免把「扇区: 9」当成容量。
+# 当前 poll 脚本不上报容量，这里先解析着；脚本补报后自动生效，不必再改代码。
+_SIZE_RE = re.compile(r'(\d+(?:\.\d+)?)\s*([KMGT])(?:i?B)?\b', re.I)
+_SIZE_TB = {"K": 1e-9, "M": 1e-6, "G": 1e-3, "T": 1.0}
+
+
+def parse_size(text: str) -> str:
+    """从一段文本里抠出容量，归一化成 1.8T / 894G 这种短写法。抠不到返回 ''。"""
+    m = _SIZE_RE.search(text or "")
+    return f"{m.group(1)}{m.group(2).upper()}" if m else ""
+
+
+def size_tb(s: str):
+    """'1.8T' → 1.8（TB）。认不出返回 None，供合计时跳过。"""
+    m = re.match(r'^(\d+(?:\.\d+)?)([KMGT])$', (s or "").strip().upper())
+    if not m:
+        return None
+    return float(m.group(1)) * _SIZE_TB[m.group(2)]
+
+
+def _fmt_tb(v: float) -> str:
+    if v >= 1000:
+        return f"{v / 1000:.2f}P"
+    if v >= 100:
+        return f"{v:.0f}T"
+    return f"{v:.1f}T"
 
 
 def _is_real_issue(msg: str) -> bool:
@@ -65,6 +93,7 @@ _LOGS_TTL = 120       # 日志解析缓存 2 分钟
 def _blank():
     return {"settings": {"default_per_row": DEFAULT_PER_ROW,
                          "default_mode": "h",     # h=横排(多列) | v=竖排(一列)
+                         "default_orient": "v",   # 盘向：v=竖装(窄高) | h=横装(宽扁)
                          "cell_label": "slot"},   # slot | dev
             "servers": []}
 
@@ -97,8 +126,15 @@ def _clamp_per_row(v) -> int:
 
 
 def _clamp_mode(v) -> str:
+    """面板排布：h=横排(多列) | v=竖排(一列)。"""
     v = (v or "").strip().lower()
     return v if v in ("h", "v") else "h"
+
+
+def _clamp_orient(v) -> str:
+    """盘向：v=竖装(窄高格子) | h=横装(宽扁格子)。"""
+    v = (v or "").strip().lower()
+    return v if v in ("h", "v") else "v"
 
 
 def get_server(d: dict, name: str):
@@ -117,6 +153,7 @@ def upsert_server(name: str, ip: str = "", per_row=None) -> dict:
     if s is None:
         s = {"name": name, "ip": (ip or "").strip(),
              "mode": _clamp_mode(d["settings"].get("default_mode")),
+             "orient": _clamp_orient(d["settings"].get("default_orient")),
              "per_row": _clamp_per_row(per_row or d["settings"]["default_per_row"]),
              "disks": []}
         d["servers"].append(s)
@@ -143,6 +180,7 @@ def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
     if s is None:
         s = {"name": name, "ip": (ip or "").strip(),
              "mode": _clamp_mode(d["settings"].get("default_mode")),
+             "orient": _clamp_orient(d["settings"].get("default_orient")),
              "per_row": _clamp_per_row(d["settings"]["default_per_row"]),
              "disks": []}
         d["servers"].append(s)
@@ -152,17 +190,28 @@ def _ensure(d: dict, name: str, ip: str = "") -> dict | None:
     return s
 
 
-def set_view(server: str, mode: str = "", per_row=0, ip: str = "") -> None:
-    """改视图：横/竖 + 横排每排数量。per_row<=0 表示不改。"""
+def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
+             ip: str = "", rows=0) -> None:
+    """改视图：面板横竖 + 每排数量 + 盘向（竖装/横装）。
+
+    两个维度都可设，殊途同归到「槽位数」：
+      给了 rows → 槽位数 = 每排 × 排数（按矩形机箱来想）
+      没给 rows → 只改排布，槽位数不动（由 set_slot_count 单独声明）
+    空值一律表示「不改」。
+    """
     d = load()
     s = _ensure(d, server, ip)
     if s is None:
         return
     if mode:
         s["mode"] = _clamp_mode(mode)
+    if orient:
+        s["orient"] = _clamp_orient(orient)
     if per_row and int(per_row) > 0:
         s["per_row"] = _clamp_per_row(per_row)
     save(d)
+    if rows and int(rows) > 0:
+        set_slot_count(server, s["per_row"] * min(int(rows), 200), ip)
 
 
 def save_order(server: str, rows: list) -> int:
@@ -177,11 +226,12 @@ def save_order(server: str, rows: list) -> int:
         return 0
     out = []
     for i, item in enumerate(rows):
-        dev, osd, note = (list(item) + ["", "", ""])[:3]
+        dev, osd, note, size = (list(item) + ["", "", "", ""])[:4]
         out.append({"slot": i,
                     "dev": (dev or "").strip(),
                     "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
-                    "note": (note or "").strip()})
+                    "note": (note or "").strip(),
+                    "size": (size or "").strip()})
     s["disks"] = out
     save(d)
     return len(out)
@@ -228,7 +278,7 @@ def remove_disk(server: str, slot) -> None:
 
 
 def save_table(server: str, per_row, rows: list) -> None:
-    """整表保存。rows = [(slot, dev, osd, note), ...]；槽号留空的行即删除。"""
+    """整表保存。rows = [(slot, dev, osd, note, size), ...]；槽号留空的行即删除。"""
     d = load()
     s = get_server(d, (server or "").strip())
     if s is None:
@@ -236,7 +286,8 @@ def save_table(server: str, per_row, rows: list) -> None:
     if per_row and int(per_row) > 0:      # 视图已由工具条单独管，这里留空即不动
         s["per_row"] = _clamp_per_row(per_row)
     out, seen = [], set()
-    for slot, dev, osd, note in rows:
+    for row in rows:
+        slot, dev, osd, note, size = (list(row) + [""] * 5)[:5]
         try:
             n = int(str(slot).strip())
         except (TypeError, ValueError):
@@ -246,7 +297,8 @@ def save_table(server: str, per_row, rows: list) -> None:
         seen.add(n)
         out.append({"slot": n, "dev": (dev or "").strip(),
                     "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
-                    "note": (note or "").strip()})
+                    "note": (note or "").strip(),
+                    "size": parse_size(size) or (size or "").strip()})
     s["disks"] = sorted(out, key=lambda x: x["slot"])
     save(d)
 
@@ -270,6 +322,7 @@ def archive_unfiled(name: str) -> int:
     if s is None:
         s = {"name": name, "ip": (poll_logs()["by_host"].get(name) or {}).get("ip", ""),
              "mode": _clamp_mode(d["settings"].get("default_mode")),
+             "orient": _clamp_orient(d["settings"].get("default_orient")),
              "per_row": d["settings"]["default_per_row"], "disks": []}
         d["servers"].append(s)
     have = {x.get("dev") for x in s["disks"] if x.get("dev")}
@@ -289,6 +342,8 @@ def archive_unfiled(name: str) -> int:
             nxt += 1
         row["dev"] = dev
         row["osd"] = ent.get("osd", "")
+        if ent.get("size") and not row.get("size"):
+            row["size"] = ent["size"]
         added += 1
     if added:
         s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
@@ -388,6 +443,10 @@ def poll_logs() -> dict:
             ent = h["disks"].setdefault(dev, {})
             ent["osd"] = m.group("osd") if m.group("osd") != "?" else ""
             ent["attr"] = (m.group("attr") or "").strip()
+            # 容量：poll 脚本目前不上报，故从属性括号和正文里尽力抠（抠不到就留空）
+            sz = parse_size(ent["attr"]) or parse_size(body)
+            if sz:
+                ent["size"] = sz
             if m.group("tag") == "异常":
                 if _is_real_issue(body):
                     ent["issue"] = body
@@ -425,6 +484,7 @@ def merged(include_hosts: bool = True) -> dict:
             continue
         servers.append(_assemble({"name": name, "ip": h.get("ip", ""),
                                   "mode": d["settings"].get("default_mode"),
+                                  "orient": d["settings"].get("default_orient"),
                                   "per_row": d["settings"]["default_per_row"],
                                   "disks": []}, h, auto=True))
     # hosts 文件里未建档的：占位（有 IP 无盘位）
@@ -435,6 +495,7 @@ def merged(include_hosts: bool = True) -> dict:
             servers.append(_assemble(
                 {"name": row["name"], "ip": row["ip"],
                  "mode": d["settings"].get("default_mode"),
+                 "orient": d["settings"].get("default_orient"),
                  "per_row": d["settings"]["default_per_row"],
                  "disks": [], "unbuilt": True}, None, auto=True))
     servers.sort(key=lambda x: x["name"])
@@ -463,6 +524,7 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
 def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
     """把一台服务器的布局与日志合并成渲染行。"""
     mode = _clamp_mode(s.get("mode"))
+    orient = _clamp_orient(s.get("orient") or DEFAULT_ORIENT)
     h_per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
     per_row = 1 if mode == "v" else h_per_row   # 竖排：一列；横排：多列
     log_disks = (log_h or {}).get("disks", {}) or {}
@@ -478,6 +540,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
             "dev": dev,
             "osd": (row.get("osd") or "").strip() or (ent or {}).get("osd", ""),
             "attr": (ent or {}).get("attr", ""),
+            "size": (row.get("size") or "").strip() or (ent or {}).get("size", ""),
             "note": (row.get("note") or "").strip(),
             "issue": (ent or {}).get("issue", ""),
             "status": ("异常" if (ent or {}).get("issue")
@@ -491,17 +554,20 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
             continue
         st = _disk_state(ent, True)
         disks.append({"slot": None, "dev": dev, "osd": ent.get("osd", ""),
-                      "attr": ent.get("attr", ""), "note": "", "issue": ent.get("issue", ""),
+                      "attr": ent.get("attr", ""), "size": ent.get("size", ""),
+                      "note": "", "issue": ent.get("issue", ""),
                       "status": ("异常" if ent.get("issue") else ent.get("status", "")),
                       "known": True, "unfiled": True,
                       "state": st, "label": _STATE_LABEL[st]})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))
     # 面板分行：每排 per_row 个
-    slots = [x for x in disks if x["slot"] is not None]
+    framed = [x for x in disks if x["slot"] is not None]
     extra = [x for x in disks if x["slot"] is None]
-    rows = [slots[i:i + per_row] for i in range(0, len(slots), per_row)]
+    rows = [framed[i:i + per_row] for i in range(0, len(framed), per_row)]
     if extra:
         rows.append(extra)
+    # 排数：只数有槽号的格子（日志发现的「未建档」行不算进机箱排数）
+    layout_rows = (len(framed) + per_row - 1) // per_row if framed else 0
     bad = sum(1 for x in disks if x["state"] == "err")
     unknown = sum(1 for x in disks if x["state"] == "warn")
     poll_errors = list((log_h or {}).get("poll_errors") or [])
@@ -513,13 +579,19 @@ def _assemble(s: dict, log_h: dict, auto: bool = False) -> dict:
                  ("未建档" if s.get("unbuilt") else "轮询异常"))
     else:
         st, label = ("ok", "全部健康") if disks else ("none", "")
+    # 容量合计：只累加认得出来的（1.8T / 894G / 400GiB …），认不出的跳过
+    sizes = [size_tb(x["size"]) for x in disks if x["dev"]]
+    known = [v for v in sizes if v is not None]
+    total = _fmt_tb(sum(known)) if known else ""
     return {"name": s["name"], "ip": (s.get("ip") or (log_h or {}).get("ip", "")),
-            "mode": mode, "cols": per_row, "h_per_row": h_per_row,
+            "mode": mode, "orient": orient, "cols": per_row, "h_per_row": h_per_row,
             "row_count": len(rows), "rows": rows, "disks": disks,
+            "slots": len(framed), "layout_rows": layout_rows,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
             # count = 面板格子数（含空槽），installed = 其中真装了盘的数量
             "count": len(disks),
             "installed": sum(1 for x in disks if x["dev"]),
+            "size_known": len(known), "total_size": total,
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
             "unfiled": sum(1 for x in disks if x.get("unfiled")),

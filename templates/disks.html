@@ -39,6 +39,9 @@
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
     <span class="meta">{{ s.ip or '无 IP' }}</span>
     <span class="meta">已装 {{ s.installed }}{% if s.count != s.installed %} / 共 {{ s.count }} 槽{% else %} 盘{% endif %}</span>
+    {% if s.total_size %}
+    <span class="meta" title="{% if s.size_known < s.installed %}仅统计已填容量的 {{ s.size_known }} / {{ s.installed }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
+    {% endif %}
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     <span style="flex:1"></span>
     {% if is_admin %}
@@ -62,25 +65,32 @@
   {# ---------- 视图工具条 ---------- #}
   {% if is_admin %}
   <div class="baytools">
-    <form method="post" action="/disks/view" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
+    <form method="post" action="/disks/view" style="display:flex;align-items:center;gap:7px;margin:0;flex-wrap:wrap">
       <input type="hidden" name="server" value="{{ s.name }}">
       <input type="hidden" name="ip" value="{{ s.ip }}">
-      <span class="meta">视图</span>
+      <span class="meta">面板</span>
       <select name="mode" title="竖排 = 一列到底；横排 = 多列铺开">
         <option value="h" {% if s.mode == 'h' %}selected{% endif %}>横排</option>
         <option value="v" {% if s.mode == 'v' %}selected{% endif %}>竖排</option>
       </select>
+      <span class="meta">盘向</span>
+      <select name="orient" title="竖装 = 窄高格子（盘立着，像机箱正面）；横装 = 宽扁格子（盘平放）">
+        <option value="v" {% if s.orient == 'v' %}selected{% endif %}>竖装</option>
+        <option value="h" {% if s.orient == 'h' %}selected{% endif %}>横装</option>
+      </select>
       <span class="meta">每排</span>
-      <input type="number" name="per_row" value="{{ s.h_per_row }}" min="1" max="24" title="横排时每排的盘位数">
-      <span class="meta">盘 → 共 {{ s.row_count }} 排</span>
-      <button title="应用视图设置">应用</button>
+      <input type="number" name="per_row" value="{{ s.h_per_row }}" min="1" max="24" title="每排几个盘位">
+      <span class="meta">个 × 共</span>
+      <input type="number" name="rows" value="{{ s.layout_rows }}" min="1" max="200" title="共几排。每排 × 排数 = 槽位数">
+      <span class="meta">排 = <b>{{ s.h_per_row * s.layout_rows }}</b> 个槽位</span>
+      <button title="应用面板/盘向/每排/排数（每排 × 排数 = 槽位数）">应用</button>
     </form>
 
-    <form method="post" action="/disks/slots" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap">
+    <form method="post" action="/disks/slots" style="display:flex;align-items:center;gap:7px;margin:0;flex-wrap:wrap">
       <input type="hidden" name="server" value="{{ s.name }}">
       <input type="hidden" name="ip" value="{{ s.ip }}">
-      <span class="meta">槽位数</span>
-      <input type="number" name="count" value="{{ s.count or 12 }}" min="1" max="200"
+      <span class="meta">或直接定槽位数</span>
+      <input type="number" name="count" value="{{ s.slots or 12 }}" min="1" max="200"
              title="机箱实际槽位数。如 12 个槽位只装 8 块盘，其余 4 个显示为空槽；多余的空槽会被删除，已装盘的槽号不动">
       <button class="btn-muted" style="padding:3px 11px;font-size:12px"
               title="按槽位数排布面板：不足的补空槽，多余的空槽删除（已装盘的槽号一律保留）">设置</button>
@@ -91,20 +101,21 @@
   {% endif %}
 
   {# ---------- 面板 ---------- #}
-  <div class="baymap mode-{{ s.mode }}" data-server="{{ s.name }}" style="--per-row:{{ s.cols }}">
+  <div class="baymap mode-{{ s.mode }} orient-{{ s.orient }}" data-server="{{ s.name }}" style="--per-row:{{ s.cols }}">
     {% for row in s.rows %}
       {% for d in row %}
       <div class="bay bay-{{ d.state }} bay-live" draggable="true"
-           data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}"
-           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.attr %} · {{ d.attr }}{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issue %}{{ d.issue }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}&#10;（拖动可调整位置）">
+           data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
+           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.osd %}&#10;OSD osd.{{ d.osd }}{% else %}&#10;无 OSD{% endif %}{% if d.attr %} · {{ d.attr }}{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issue %}{{ d.issue }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}&#10;（拖动可调整位置）">
         <div class="bay-slot">{{ d.slot if d.slot is not none else '—' }}</div>
-        <div class="bay-dev">{{ d.dev.replace('/dev/','') if d.dev else '' }}</div>
+        <div class="bay-dev">{% if d.dev %}{{ d.dev.replace('/dev/','') }}{% elif d.slot is not none %}<span class="bay-empty">空</span>{% endif %}</div>
         <div class="bay-meta">
-          {% if d.osd %}osd.{{ d.osd }}{% elif d.attr %}{{ d.attr }}{% endif %}
+          {% if d.size %}<span class="bay-size">{{ d.size }}</span>{% endif %}
+          {% if d.osd %}<span class="bay-osd">osd.{{ d.osd }}</span>{% elif d.attr %}<span class="bay-osd">{{ d.attr }}</span>{% endif %}
         </div>
         {% if d.state != 'none' %}
         <span class="sbadge sbadge-{{ d.state }}">
-          <span class="dot {{ d.state if d.state in ('ok','err','warn') else '' }}"></span>{{ d.label }}
+          <span class="dot {{ d.state if d.state in ('ok','err','warn') else '' }}"></span><span class="sblabel">{{ d.label }}</span>
         </span>
         {% endif %}
       </div>
@@ -132,11 +143,13 @@
       <input type="hidden" name="server" value="{{ s.name }}">
       <div class="logpane">
         <table>
-          <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
+          <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:85px">容量</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
           {% for d in s.disks %}
           <tr>
             <td><input name="slot" value="{{ d.slot if d.slot is not none else '' }}" style="width:60px"></td>
             <td><input name="dev" value="{{ d.dev }}" placeholder="/dev/sdX"></td>
+            <td><input name="size" value="{{ d.size }}" placeholder="1.8T" style="width:75px"
+                       title="单盘容量。填 1.8T / 894G 这类写法即可，卡片头部会合计；poll 脚本补报容量后自动带入"></td>
             <td><input name="osd" value="{{ d.osd }}" placeholder="如 85" style="width:90px"></td>
             <td><input name="note" value="{{ d.note }}" placeholder="如 机箱A-第2排"></td>
             <td class="meta">{% if d.issue %}<span class="lv lv-error">异常</span>{% elif d.known %}✓{% endif %}</td>
@@ -145,6 +158,7 @@
           <tr>
             <td><input name="slot" placeholder="新" style="width:60px"></td>
             <td><input name="dev" placeholder="/dev/sdX"></td>
+            <td><input name="size" placeholder="1.8T" style="width:75px"></td>
             <td><input name="osd" placeholder="如 85" style="width:90px"></td>
             <td><input name="note" placeholder="新增一行"></td>
             <td class="meta">—</td>
@@ -269,6 +283,7 @@
         add('dev', b.dataset.dev || '');
         add('osd', b.dataset.osd || '');
         add('note', b.dataset.note || '');
+        add('size', b.dataset.size || '');
       });
       document.body.appendChild(f);
       resetDirty(server);

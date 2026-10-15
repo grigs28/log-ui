@@ -163,14 +163,42 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 /* 磁盘盘位图（面板式）
    --per-row  每排格数（竖排=1）
    --bay-w    盘位**固定**宽度：改每排数量时格子不再被拉伸/压缩，只改变排布
-   --bay-h    盘位固定高度：要装下 槽号/设备/OSD/状态徽章 四行，80px 是下限 */
+   --bay-h    盘位固定高度。
+
+   盘向（.orient-v / .orient-h）决定单块盘怎么摆，与「每排几个」正交：
+     orient-v 竖装 = 窄高格子，12 个并排就是 2U 机箱正面
+     orient-h 横装 = 宽扁格子，一层层叠着像盘架 */
 .baymap{ display:grid; grid-template-columns:repeat(var(--per-row,4), var(--bay-w,106px));
          gap:6px; margin-top:8px; justify-content:start; overflow-x:auto; padding-bottom:2px; }
+
+.baymap.orient-v{ --bay-w:48px;  --bay-h:132px; }
+.baymap.orient-h{ --bay-w:176px; --bay-h:56px;  }
+
 .bay{ position:relative; width:var(--bay-w,106px); height:var(--bay-h,80px);
       border:1px solid var(--border-light); border-radius:6px;
       background:var(--surface2); padding:4px 3px; text-align:center;
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
       overflow:hidden; }
+
+/* 竖装：窄高，内容竖着排 */
+.baymap.orient-v .bay{ padding:5px 2px; gap:2px; }
+.baymap.orient-v .bay-slot{ font-size:17px; }
+.baymap.orient-v .bay-dev{ font-size:11px; }
+.baymap.orient-v .bay-meta{ font-size:10px; line-height:1.25; display:flex;
+                            flex-direction:column; align-items:center; gap:0; }
+.baymap.orient-v .sbadge .sblabel{ display:none; }    /* 48px 宽放不下「健康」二字，只留圆点 */
+
+/* 横装：宽扁，内容横着排 */
+.baymap.orient-h .bay{ flex-direction:row; justify-content:flex-start; gap:6px;
+                       padding:4px 9px; text-align:left; }
+.baymap.orient-h .bay-slot{ font-size:15px; min-width:16px; }
+.baymap.orient-h .bay-dev{ font-size:12px; min-width:26px; }
+.baymap.orient-h .bay-meta{ display:flex; align-items:baseline; gap:6px;
+                            font-size:11px; flex:1; }
+.baymap.orient-h .sbadge{ font-size:10px; }
+
+.bay-size{ color:var(--text2); font-weight:600; }
+.bay-empty{ color:var(--muted); font-style:italic; }
 .bay-live{ cursor:grab; user-select:none; -webkit-user-select:none; transition:outline-color .12s,opacity .12s; }
 .bay-live:hover{ border-color:var(--accent); }
 .bay-live.dragging{ opacity:.45; cursor:grabbing; outline:2px dashed var(--accent); outline-offset:1px; }
