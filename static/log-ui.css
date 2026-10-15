@@ -223,6 +223,12 @@ hr{ border:0; border-top:1px solid var(--border); margin:16px 0; }
 .media-hdd{ color:var(--text2); background:color-mix(in srgb, var(--text2) 14%, transparent); }
 .media-nvme{ color:var(--brand); background:color-mix(in srgb, var(--brand) 18%, transparent); }
 
+/* 横跨多格的镜像盘（RAID1 一个设备占两个物理盘位）*/
+.bay-span{ border-color:color-mix(in srgb, var(--brand) 45%, var(--border-light)); }
+.role-raid{ font-size:9px; font-weight:600; color:var(--accent);
+            background:color-mix(in srgb, var(--accent) 14%, transparent);
+            padding:0 3px; border-radius:3px; margin-left:3px; }
+
 /* 系统盘：紫系高亮 —— 这不是普通 OSD 盘，拔之前得先认出来 */
 .role-sys{ font-size:9px; font-weight:700; color:var(--brand); letter-spacing:.3px;
            background:color-mix(in srgb, var(--brand) 16%, transparent);

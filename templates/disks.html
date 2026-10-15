@@ -40,15 +40,20 @@
     <span class="meta">{{ s.ip or s.addr_note or '无 IP' }}</span>
     {# 「共 N 槽」必须与工具条「总槽位数」同源（都只数有槽号的格子），
        未建档的日志发现盘单列，否则同一张卡片里两个槽数会对不上 #}
-    <span class="meta" title="左侧是这台机器上已知的物理盘数（含未建档），右侧是机箱声明的槽位数">
+    <span class="meta" title="左侧是设备数（一个 RAID1 设备算一个），右侧是机箱物理盘位数">
       {%- if s.slots -%}
-        {{ s.installed_any }} 盘 / {{ s.slots }} 槽
+        {{ s.installed_any }} 设备 / {{ s.slots }} 盘位
       {%- elif s.unfiled -%}
         未建槽位
       {%- else -%}
         无盘位
       {%- endif -%}
     </span>
+    {% if s.phys and s.phys != s.installed_any %}
+    <span class="meta" title="实际物理硬盘块数 —— RAID1 镜像一个设备用两块盘，所以比设备数多">
+      物理盘 {{ s.phys }} 块
+    </span>
+    {% endif %}
     {% if s.total_size %}
     <span class="meta" title="{% if s.size_known < s.installed_any %}仅统计已知容量的 {{ s.size_known }} / {{ s.installed_any }} 块盘{% else %}按盘位合计{% endif %}">合计 {{ s.total_size }}</span>
     {% endif %}
@@ -129,11 +134,12 @@
   {# ---------- 面板 ---------- #}
   <div class="baymap mode-{{ s.mode }} orient-{{ s.orient }}" data-server="{{ s.name }}" data-ip="{{ s.ip }}" style="--per-row:{{ s.cols }}">
     {% for row in s.rows %}
-      {% for d in row %}
-      <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}" draggable="true"
+      {% for d in row.cells %}
+      <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}{% if d.span > 1 %} bay-span{% endif %}" draggable="true"
+           {% if d.span > 1 %}style="grid-column:span {{ d.span }}"{% endif %}
            data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
-           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} （物理槽位 {{ d.pslots|join('、') }}）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}&#10;（拖动可调整位置）">
-        <div class="bay-slot">{% if d.slot is not none %}{{ d.slot }}{% else %}<span class="bay-unfiled-mark">未归档</span>{% endif %}</div>
+           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} —— 物理槽位 {{ d.pshort }}（{{ d.span }} 块盘）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}&#10;（拖动可调整位置）">
+        <div class="bay-slot">{% if d.slot is none %}<span class="bay-unfiled-mark">未归档</span>{% elif d.span > 1 %}{{ d.bay }}-{{ d.bay + d.span - 1 }}{% else %}{{ d.bay }}{% endif %}</div>
         <div class="bay-dev">{% if d.dev %}{{ d.dev.replace('/dev/','') }}{% elif d.slot is not none %}<span class="bay-empty">空</span>{% endif %}</div>
         {% if d.dev %}
         <div class="bay-size">
@@ -143,6 +149,7 @@
         <div class="bay-role">
           {%- if d.role %}<span class="role-sys">{{ d.role }}</span>
           {%- elif d.dclass %}<span class="role-class">{{ d.dclass }}</span>{% endif %}
+          {%- if d.span > 1 %}<span class="role-raid" title="{{ d.carrier }}">{{ d.raid or '镜像' }} {{ d.pshort }}</span>{% endif %}
         </div>
         <div class="bay-osd">{% if d.osd %}osd.{{ d.osd }}{% endif %}</div>
         {% endif %}
@@ -153,7 +160,7 @@
         {% endif %}
       </div>
       {% endfor %}
-      {% for _ in range(s.cols - row|length) %}<div class="bay bay-vacant"></div>{% endfor %}
+      {% for _ in range(s.cols - row.used) %}<div class="bay bay-vacant"></div>{% endfor %}
     {% endfor %}
     {% if not s.rows %}<div class="meta">尚无盘位——用上方「槽位数」建格子，或在下方「编辑盘位」逐条录盘</div>{% endif %}
   </div>
@@ -179,10 +186,11 @@
       <input type="hidden" name="back" value="{{ s.name }}">
       <div class="logpane">
         <table>
-          <tr><th style="width:70px">槽号</th><th>设备</th><th style="width:85px">容量</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
+          <tr><th style="width:70px">盘位</th><th>设备</th><th style="width:85px">容量</th><th style="width:110px">OSD</th><th>备注</th><th style="width:70px">日志</th></tr>
           {% for d in s.disks %}
           <tr>
-            <td><input name="slot" value="{{ d.slot if d.slot is not none else '' }}" style="width:60px"></td>
+            <td><input name="slot" value="{{ d.bay if d.slot is not none else '' }}" style="width:60px"
+                       title="起始物理盘位。镜像盘占 2 位，它后面的槽号会 +2"></td>
             <td><input name="dev" value="{{ d.dev }}" placeholder="/dev/sdX"></td>
             <td><input name="size" value="{{ d.size }}" placeholder="1.8T" style="width:75px"
                        title="单盘容量。填 1.8T / 894G 这类写法即可，卡片头部会合计；poll 脚本补报容量后自动带入"></td>

@@ -279,19 +279,26 @@ def set_view(server: str, mode: str = "", per_row=0, orient: str = "",
 
 
 def save_order(server: str, rows: list, ip: str = "") -> int:
-    """按面板显示顺序重排盘位：槽号 = 视觉顺序号（0..N-1）。返回写入的盘位数。
+    """按面板显示顺序重排盘位。返回写入的盘位数（物理盘位口径）。
 
-    **不凭空扩容**：面板尾部那几块「日志发现的盘」跟着一起提交，若直接编号就会
-    把机箱从 8 槽变成 9 槽——用户只是拖了下位置，槽位数不该变。规则是
-      · 总槽位数 = max(原声明槽位数, 实际装了盘的块数)
-      · 多出来的格子优先丢**空槽**（空槽只是占位，丢了不损失信息），从后往前丢
-      · 盘数真的超过槽位数时才扩容
+    槽号 = **起始物理盘位**，由 _renumber 按各设备的 span 累加算出：
+    镜像盘占 2 位，它后面的设备槽号就 +2 而不是 +1。
+
+    **不凭空扩容**：面板尾部那几块「日志发现的盘」跟着一起提交，若直接按序编号
+    就会把机箱从 8 位变成 9 位——用户只是拖了下位置，盘位数不该变。规则是
+      · 总盘位数 = max(原声明盘位数, 提交内容实际占用的盘位数)
+      · 多出来的位置优先丢**空槽**（空槽只是占位，丢了不损失信息），从后往前丢
+      · 装了盘的块数真的超过盘位数时才扩容
     """
     d = load()
     s = _ensure(d, server, ip, seed_slots=True)   # 未建档的机器拖动也要能生效
     if s is None or not rows:
         return 0
-    declared = sum(1 for x in s["disks"] if x.get("slot") is not None)
+    log_disks = _log_disks_of(s["name"])
+    per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
+    span = lambda dev: _span_of(dev, log_disks, per_row)      # noqa: E731
+
+    declared = sum(span(x.get("dev") or "") for x in s["disks"] if x.get("slot") is not None)
     items = []
     for item in rows:
         dev, osd, note, size = (list(item) + ["", "", "", ""])[:4]
@@ -299,20 +306,20 @@ def save_order(server: str, rows: list, ip: str = "") -> int:
                       "osd": (osd or "").strip().lstrip(".").replace("osd.", ""),
                       "note": (note or "").strip(),
                       "size": (size or "").strip()})
-    total = max(declared, sum(1 for x in items if x["dev"]))
-    excess = len(items) - total
+    total = max(declared, sum(span(x["dev"]) for x in items if x["dev"]))
+    excess = sum(span(x["dev"]) for x in items) - total
     for i in range(len(items) - 1, -1, -1):     # 从后往前丢空槽
         if excess <= 0:
             break
         if not items[i]["dev"]:
+            excess -= span(items[i]["dev"])
             items.pop(i)
-            excess -= 1
-    while len(items) < total:                   # 不够就补空槽
+    while sum(span(x["dev"]) for x in items) < total:   # 不够就补空槽
         items.append({"dev": "", "osd": "", "note": "", "size": ""})
-    out = [dict(x, slot=i) for i, x in enumerate(items)]
-    s["disks"] = out
+    s["disks"] = [dict(x, slot=i) for i, x in enumerate(items)]
+    _renumber(s, log_disks, per_row)            # 槽号 = 起始物理盘位
     save(d)
-    return len(out)
+    return sum(span(x["dev"]) for x in items)
 
 
 def remove_server(name: str) -> None:
@@ -338,7 +345,7 @@ def upsert_disk(server: str, slot, dev: str = "", osd: str = "", note: str = "")
     row["dev"] = (dev or "").strip()
     row["osd"] = (osd or "").strip().lstrip(".").replace("osd.", "")
     row["note"] = (note or "").strip()
-    s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
+    _renumber(s, _log_disks_of(server), _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW))
     save(d)
 
 
@@ -378,6 +385,7 @@ def save_table(server: str, per_row, rows: list) -> None:
                     "note": (note or "").strip(),
                     "size": parse_size(size) or (size or "").strip()})
     s["disks"] = sorted(out, key=lambda x: x["slot"])
+    _renumber(s, _log_disks_of(server), _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW))
     save(d)
 
 
@@ -427,20 +435,36 @@ def archive_unfiled(name: str) -> int:
             row["size"] = ent["size"]
         added += 1
     if added:
-        s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
+        _renumber(s, log_disks, _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW))
         save(d)
     return added
 
 
-def set_slot_count(server: str, count, ip: str = "") -> int:
-    """声明机箱槽位数：面板显示 0..count-1 共 count 个格子，装了几块就几块亮。
+def _renumber(s: dict, log_disks: dict, per_row: int) -> None:
+    """把槽号重排成**物理盘位**：每个设备的槽号 = 它在顺序里的起始盘位。
 
-    未占用的格子是空槽（可被「建档」或拖动填充）；多出来的空格子直接删掉。
-    **已装盘的槽号一律不动**——若最高已装槽位 ≥ count，count 会被顶到它 +1，
-    避免设置值小于实际装盘数时把盘挤出面板。返回最终生效的槽位数。
+    镜像盘占 2 个盘位，所以它后面的设备槽号要 +2 而不是 +1 ——
+    这样面板上标的号、编辑表里的号、poll 报的 e252/sN 三者才对得上。
+    """
+    s["disks"].sort(key=lambda x: (int(x.get("slot", 0)), (x.get("dev") or "")))
+    pos = 0
+    for row in s["disks"]:
+        row["slot"] = pos
+        pos += _span_of(row.get("dev") or "", log_disks, per_row)
+
+
+def _log_disks_of(name: str) -> dict:
+    return (poll_logs()["by_host"].get((name or "").strip()) or {}).get("disks", {}) or {}
+
+
+def set_slot_count(server: str, count, ip: str = "") -> int:
+    """声明机箱**物理盘位数**：面板显示 0..count-1 号盘位，装了几块亮几块。
+
+    注意一个设备可能占多位（RAID1 镜像占 2 位），所以 count 个盘位未必放得下
+    count 个设备。已装盘的设备一个都不删，不够就扩容。返回最终生效的盘位数。
     """
     d = load()
-    s = _ensure(d, server, ip)
+    s = _ensure(d, server, ip, seed_slots=True)
     if s is None:
         return 0
     try:
@@ -449,19 +473,22 @@ def set_slot_count(server: str, count, ip: str = "") -> int:
         return 0
     if n < 1 or n > 200:
         return 0
-    occupied = [int(x.get("slot", -1)) for x in s["disks"] if (x.get("dev") or "").strip()]
-    if occupied:
-        n = max(n, max(occupied) + 1)
-    # 超出 n 的空槽删掉（有盘的一律保留）
-    s["disks"] = [x for x in s["disks"]
-                  if (x.get("dev") or "").strip() or int(x.get("slot", -1)) < n]
-    have = {int(x.get("slot", -1)) for x in s["disks"]}
-    for i in range(n):
-        if i not in have:
-            s["disks"].append({"slot": i, "dev": "", "osd": "", "note": ""})
-    s["disks"].sort(key=lambda x: int(x.get("slot", 0)))
+    log_disks = _log_disks_of(s["name"])
+    per_row = _clamp_per_row(s.get("per_row") or DEFAULT_PER_ROW)
+    kept, used = [], 0
+    for row in s["disks"]:
+        sp = _span_of(row.get("dev") or "", log_disks, per_row)
+        # 装了盘的无论如何保留；空槽位只在还有预算时保留
+        if (row.get("dev") or "").strip() or used + sp <= n:
+            kept.append(row)
+            used += sp
+    while used < n:                       # 不够就补空盘位（每个 1 位）
+        kept.append({"slot": used, "dev": "", "osd": "", "note": "", "size": ""})
+        used += 1
+    s["disks"] = kept
+    _renumber(s, log_disks, per_row)
     save(d)
-    return n
+    return used
 
 
 # ---------------- 服务器清单（NAS hosts 文件） ----------------
@@ -701,11 +728,29 @@ def _status_text(ent) -> str:
     return st
 
 
+def _span_of(dev: str, log_disks: dict, per_row: int) -> int:
+    """这个设备占几个物理盘位。
+
+    poll 的 RAID1(e252/s0+e252/s1) 报两个物理槽位 —— 一块 /dev/sdX 实际是两块盘，
+    面板上就该占两格。取不到槽位信息的按 1 格。
+    """
+    ent = (log_disks or {}).get((dev or "").strip()) or {}
+    return min(max(1, len(ent.get("pslots") or [])), max(1, int(per_row)))
+
+
+def _pshort(pslots) -> str:
+    """['252/0','252/1'] → 's0+s1'（去掉 EID，只留槽位号）。"""
+    return "+".join("s" + p.split("/")[-1] for p in (pslots or []) if "/" in p)
+
+
 def _log_fields(ent) -> dict:
     """日志侧带出来的硬件信息（档案里不存，每次从日志现取）。"""
     e = ent or {}
+    ps = e.get("pslots") or []
+    car = e.get("carrier", "")
     return {"media": e.get("media", ""), "role": e.get("role", ""),
-            "carrier": e.get("carrier", ""), "pslots": e.get("pslots", []),
+            "carrier": car, "pslots": ps, "pshort": _pshort(ps),
+            "raid": car.split("(")[0] if car else "",
             "dclass": e.get("dclass", "")}
 
 
@@ -739,6 +784,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "issues": (ent or {}).get("issues", []),
             "known": bool(ent),
             "state": st, "label": _state_label(st, ent),
+            "span": _span_of(dev, log_disks, per_row),
             **_log_fields(ent),
         })
     # 日志里有、布局里没录的盘：自动补进图（提示未建档）
@@ -751,18 +797,38 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                       "note": "", "issue": ent.get("issue", ""),
                       "status": _status_text(ent), "issues": ent.get("issues", []),
                       "known": True, "unfiled": True,
-                      "state": st, "label": _state_label(st, ent), **_log_fields(ent)})
+                      "state": st, "label": _state_label(st, ent),
+                      "span": _span_of(dev, log_disks, per_row), **_log_fields(ent)})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))
     # 面板分行：每排 per_row 个
+    # 行打包：每排 per_row 个**物理盘位**，横跨 2 格的镜像盘吃掉 2 个位置。
+    # 放不下就换行，避免 CSS grid 把跨格元素挤到下一行留下空洞。
+    def pack(items, r0=0):
+        out, cur = [], []
+        used = 0
+        for x in items:
+            sp = x["span"]
+            if cur and used + sp > per_row:
+                out.append({"cells": cur, "used": used})
+                cur, used = [], 0
+            x["bay"] = r0 + sum(r["used"] for r in out) + used
+            cur.append(x)
+            used += sp
+        if cur:
+            out.append({"cells": cur, "used": used})
+        return out
+
     framed = [x for x in disks if x["slot"] is not None]
     extra = [x for x in disks if x["slot"] is None]
-    rows = [framed[i:i + per_row] for i in range(0, len(framed), per_row)]
+    rows = pack(framed)
     if extra:
-        rows.append(extra)
-    # 排数：只数有槽号的格子（日志发现的「未建档」行不算进机箱排数）
-    layout_rows = (len(framed) + per_row - 1) // per_row if framed else 0
-    # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关
-    h_rows = (-(-len(framed) // h_per_row)) if framed else 0
+        rows += pack(extra, r0=sum(r["used"] for r in rows))
+    # 排数：只数机箱盘位（日志发现的「未建档」行不算进机箱）
+    layout_rows = len(pack(framed)) if framed else 0
+    total_units = sum(x["span"] for x in framed)
+    # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关。
+    # 按物理盘位算 —— 镜像盘占 2 个位置，「每排 8 × 3 排」就是 24 个盘位。
+    h_rows = (-(-total_units // h_per_row)) if total_units else 0
     bad = sum(1 for x in disks if x["state"] == "err")
     unknown = sum(1 for x in disks if x["state"] == "warn")
     poll_errors = list((log_h or {}).get("poll_errors") or [])
@@ -788,7 +854,10 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "addr_note": (log_h or {}).get("addr_note", ""),
             "mode": mode, "orient": orient, "cols": per_row, "h_per_row": h_per_row,
             "row_count": len(rows), "rows": rows, "disks": disks,
-            "slots": len(framed), "layout_rows": layout_rows, "h_rows": h_rows,
+            # slots = 机箱**物理盘位**总数（一个 RAID1 设备占 2 个）；devices = 设备数
+            "slots": total_units, "devices": sum(1 for x in framed if x["dev"]),
+            "phys": sum(x["span"] for x in disks if x["dev"]),
+            "layout_rows": layout_rows, "h_rows": h_rows,
             "auto": auto, "unbuilt": s.get("unbuilt", False),
             # count = 面板格子数（含空槽）；installed = **有槽号的**格子里装了盘的数量。
             # 日志发现但未建档的盘没有槽号、不占机箱槽位，故不计入 installed ——
