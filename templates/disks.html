@@ -307,7 +307,32 @@
     bar(3);
   }
 
-  function stopTimers() { clearInterval(timer); clearInterval(cdTimer); }
+  function stopTimers() { clearInterval(timer); clearInterval(cdTimer); clearTimeout(acTimer); }
+
+  var acTimer = null, acLeft = 0;
+  /* 该自己关的时候就别让人手点。刷新由调用方决定（检测完要刷新才能看到新状态）。 */
+  function autoClose(sec, note) {
+    clearTimeout(acTimer);
+    var reload = arguments.length > 2 ? arguments[2] : /刷新/.test(note || '');
+    acLeft = Math.ceil(sec);
+    var tick = function () {
+      if (acLeft <= 0) {
+        hideModal();
+        if (reload) location.reload();
+        return;
+      }
+      elFoot.textContent = (note || '') + ' · ' + acLeft + ' 秒后自动关闭';
+      acLeft--;
+      acTimer = setTimeout(tick, 1000);
+    };
+    tick();
+  }
+
+  function hideModal() {
+    modal.hidden = true;
+    stopTimers();
+    acTimer = null;
+  }
 
   /* 亮灯：任务 1 秒就返回了，之后是本地倒计时 */
   function startCountdown(sec) {
@@ -323,10 +348,10 @@
       elState.textContent = '还有 ' + Math.max(0, left) + ' 秒';
       if (left <= 0) {
         clearInterval(cdTimer);
-        elVerd.textContent = '灯已自动熄灭';
+        elVerd.textContent = '🔅 灯已自动熄灭';
         elVerd.className = 'actverdict';
-        elFoot.textContent = '（到时间自动关的；想提前关可以下次点「亮灯」后用弹窗里的「关灯」）';
         elOff.hidden = true;
+        autoClose(2);
       }
     }, 1000);
   }
@@ -353,13 +378,13 @@
         bar(100, cls);
         elVerd.textContent = st ? ('结论：' + st) : '未解析到状态行';
         elVerd.className = 'actverdict ' + cls;
-        elFoot.textContent = '刷新页面即可看到新状态';
-        setTimeout(function () { location.reload(); }, 3000);
+        autoClose(2.5, '即将自动关闭并刷新页面');
       } else if (act === 'led-off') {
         bar(100);
         elVerd.textContent = '🔅 已发送关灯';
         elVerd.className = 'actverdict';
         elOff.hidden = true;
+        autoClose(1.5);
       } else {
         startCountdown(j.seconds || LED_SECONDS);
       }
@@ -411,8 +436,16 @@
     fire('led-off', ctx.server, ctx.dev, ctx.slots);
   });
 
-  document.getElementById('act-close').addEventListener('click', function () {
-    modal.hidden = true; stopTimers();
+  document.getElementById('act-close').addEventListener('click', hideModal);
+
+  // 点遮罩（弹窗外的暗色区域）也能关
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) hideModal();
+  });
+
+  // Esc 关闭
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) hideModal();
   });
 })();
 </script>
