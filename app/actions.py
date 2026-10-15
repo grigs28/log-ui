@@ -43,23 +43,38 @@ _SLOT_RE = re.compile(r'^e\d+/s\d+$')
 # 裸锚点会匹配到它（osd.poll.sh 的规格文档里记过同一个坑）
 _STATE_RE = re.compile(r'状态:\s*([✓✗⚠].*)$', re.M)
 
-def _run_wsh(ip: str, remote: str, timeout: int):
-    """调用 w.sh 把命令下发到节点。
+_HAS_VERDICT = re.compile(r'状态:\s*[✓✗⚠]')
 
-    w.sh 每次运行都会**强制自更新**（重下并替换自己），替换的那一瞬间
-    `/opt/grigs/w.sh` 会短暂不存在 —— 实测连续调用两次就撞上了
-    `FileNotFoundError: '/opt/grigs/w.sh'`。所以缺文件时短暂等待重试。
+
+def _run_wsh(ip: str, remote: str, timeout: int, expect_verdict: bool = False):
+    """调用 w.sh 把命令下发到节点。带重试。
+
+    两类瞬时故障都要重试：
+      · w.sh 每次运行都会**强制自更新**（重下并替换自己），替换那一瞬间
+        `/opt/grigs/w.sh` 不存在 —— 实测连续调用撞上过 FileNotFoundError
+      · w.sh 自更新期间下发失败时，ssh.run.sh 会把**上一次**的日志内容打出来
+        （日志目录按命令名复用），看起来像成功但其实是旧数据。
+        所以检测类命令要求输出里必须出现「状态: ✓/✗/⚠」，没有就重试
     """
-    delay = 1.0
-    for attempt in range(5):
+    delay, last = 1.0, None
+    for attempt in range(3):
         try:
-            return subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
-                                  capture_output=True, text=True, timeout=timeout)
-        except FileNotFoundError:
-            if attempt == 4:
-                raise
+            p = subprocess.run([W_SH, "ssh.run.sh", ip, "--", remote],
+                               capture_output=True, text=True, timeout=timeout)
+        except FileNotFoundError as e:
+            last = e
+            p = None
+        if p is not None:
+            if not (expect_verdict and p.returncode != 0
+                    and not _HAS_VERDICT.search(p.stdout or "")):
+                return p
+            last = p
+        if attempt < 2:
             time.sleep(delay)
             delay *= 1.7
+    if isinstance(last, subprocess.CompletedProcess):
+        return last
+    raise last if last is not None else RuntimeError("w.sh 调用失败")
 
 
 JOBS: dict = {}
@@ -135,7 +150,7 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
         with _HOST_LOCKS_GUARD:
             hlock = _HOST_LOCKS.setdefault(host, threading.Lock())
         with hlock:
-            p = _run_wsh(ip, remote, timeout)
+            p = _run_wsh(ip, remote, timeout, expect_verdict=(action == "check"))
         out = _ANSI_RE.sub("", (p.stdout or "") + (("\n" + p.stderr) if p.stderr else ""))
         with _LOCK:
             job["rc"] = p.returncode
