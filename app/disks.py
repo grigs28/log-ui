@@ -745,14 +745,21 @@ def _status_text(ent) -> str:
     return st
 
 
-def _span_of(dev: str, log_disks: dict, per_row: int) -> int:
-    """这个设备占几个物理盘位。
+SPAN_MAX = 8               # 单个设备最多占几个物理盘位（RAID5/6 也不会更多了）
+
+
+def _span_of(dev: str, log_disks: dict, per_row: int = 0) -> int:
+    """这个设备占几个**物理盘位**。
 
     poll 的 RAID1(e252/s0+e252/s1) 报两个物理槽位 —— 一块 /dev/sdX 实际是两块盘，
-    面板上就该占两格。取不到槽位信息的按 1 格。
+    机箱里就占两个位置。取不到槽位信息的按 1 位。
+
+    **不再按每排数量截断**：竖排时每排只有 1 格，截断会让 RAID1 的两块盘塌成 1 个盘位，
+    盘位数凭空少一个（实测 x5-nod18 竖排下 8 盘位显示成 7）。
+    视觉上占几列由 `place` 单独控制（见 _assemble）。
     """
     ent = (log_disks or {}).get((dev or "").strip()) or {}
-    return min(max(1, len(ent.get("pslots") or [])), max(1, int(per_row)))
+    return min(max(1, len(ent.get("pslots") or [])), SPAN_MAX)
 
 
 def _pshort(pslots) -> str:
@@ -853,6 +860,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "known": bool(ent), "_poll_ts": (ent or {}).get("ts", 0),
             "state": st, "label": _state_label(st, ent),
             "span": _span_of(dev, log_disks, per_row),
+            "place": min(_span_of(dev, log_disks, per_row), per_row),
             **_log_fields(ent),
         })
     # 日志里有、布局里没录的盘：自动补进图（提示未建档）
@@ -866,33 +874,42 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                       "status": _status_text(ent), "issues": ent.get("issues", []),
                       "known": True, "unfiled": True, "_poll_ts": ent.get("ts", 0),
                       "state": st, "label": _state_label(st, ent),
-                      "span": _span_of(dev, log_disks, per_row), **_log_fields(ent)})
+                      "span": _span_of(dev, log_disks, per_row),
+                      "place": min(_span_of(dev, log_disks, per_row), per_row),
+                      **_log_fields(ent)})
     disks.sort(key=lambda x: (x["slot"] is None, x["slot"] if x["slot"] is not None else 0))
     # 面板分行：每排 per_row 个
     # 行打包：每排 per_row 个**物理盘位**，横跨 2 格的镜像盘吃掉 2 个位置。
     # 放不下就换行，避免 CSS grid 把跨格元素挤到下一行留下空洞。
-    def pack(items, r0=0):
+    def pack(items, bay0=0):
+        """按**视觉占位**（place）分行，按**物理盘位数**（span）编号。
+
+        两者在竖排下不相等：镜像盘视觉上只占 1 列（每排就 1 格），
+        但机箱里实打实占 2 个盘位 —— 编号必须按 2 走，否则会跟后一格重号。
+        """
         out, cur = [], []
-        used = 0
+        used, bay = 0, bay0
         for x in items:
-            sp = x["span"]
+            sp = x["place"]
             if cur and used + sp > per_row:
                 out.append({"cells": cur, "used": used})
                 cur, used = [], 0
-            x["bay"] = r0 + sum(r["used"] for r in out) + used
+            x["bay"] = bay
+            bay += x["span"]
             cur.append(x)
             used += sp
         if cur:
             out.append({"cells": cur, "used": used})
-        return out
+        return out, bay
 
     framed = [x for x in disks if x["slot"] is not None]
     extra = [x for x in disks if x["slot"] is None]
-    rows = pack(framed)
+    rows, nxt_bay = pack(framed)
+    layout_rows = len(rows)
     if extra:
-        rows += pack(extra, r0=sum(r["used"] for r in rows))
-    # 排数：只数机箱盘位（日志发现的「未建档」行不算进机箱）
-    layout_rows = len(pack(framed)) if framed else 0
+        extra_rows, _ = pack(extra, bay0=nxt_bay)
+        rows += extra_rows
+    # 盘位数 = 机箱物理盘位总数（含空槽），日志发现的「未建档」行不算进机箱
     total_units = sum(x["span"] for x in framed)
     # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关。
     # 按物理盘位算 —— 镜像盘占 2 个位置，「每排 8 × 3 排」就是 24 个盘位。
