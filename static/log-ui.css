@@ -168,6 +168,10 @@ tr:hover td{ background:var(--panel-2); }
 .cbadge-on::before{ background:var(--led-ok); box-shadow:0 0 7px -1px var(--led-ok); }
 .cbadge-off{ color:var(--ink-3); }
 .cbadge-off::before{ background:var(--led-err); box-shadow:0 0 7px -1px var(--led-err); }
+/* 顶栏里的采集器徽章：紧凑一点，别把顶栏撑高 */
+header .hbadges{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+header .cbadge{ font-size:11px; padding:2px 9px; gap:6px; }
+header .cbadge::before{ width:6px; height:6px; }
 
 .tag{
   display:inline-block; padding:1px 7px; border-radius:2px; font-size:10px; font-weight:600;

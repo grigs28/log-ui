@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [2.1.5] - 2026-10-16
+
+### Changed
+- **采集器徽章（vector / cobian / victorialogs）移到全局顶栏，用户名的左侧** ——
+  原来只在总览页那一行，别的页面（磁盘、服务器、日志…）看不到采集器通不通。
+
+  ```
+  ● LOG-UI  总览 日志 服务器 [磁盘] 实时 设置      ●vector ●cobian ●victorialogs   Grigs·管理  [登出]
+                                                          ↑ 用户名左侧，每页都在
+  ```
+
+  实现：不做成逐路由传参，而是挂**全局模板变量** `coll_badges`（与 `version` 同法），
+  `collectors.status()` 自带 60 秒缓存，渲染时调用不贵。
+  总览页原来那处重复的徽章已移除（免得同一屏出现两遍）。
+
+  顶栏里徽章缩小一号（11px）、圆点 6px，不把 46px 的顶栏撑高。
+
+## [2.1.4] - 2026-10-16
 ## [2.1.4] - 2026-10-16
 
 ### Fixed

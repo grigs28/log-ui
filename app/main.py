@@ -64,6 +64,9 @@ def _app_version() -> str:
 # 注入的是函数而不是取值：模板渲染时现读 CHANGELOG.md，
 # 否则版本号在 import 时被冻结，与实时的 /version、/changelog 不一致
 templates.env.globals["version"] = _app_version
+# 采集器徽章放进全局顶栏（用户名左侧），这样每个页面都能看到，
+# 不只总览页。collectors.status() 自带 60 秒缓存，渲染时调用不贵。
+templates.env.globals["coll_badges"] = collectors.status
 
 LEVELS = ["ALL", "error", "warning", "info", "debug"]
 REFRESH_OPTIONS = [0, 5, 10, 30, 60]

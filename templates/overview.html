@@ -10,11 +10,7 @@
     </div>
   </form>
   <span style="flex:1"></span>
-  <div style="display:flex;gap:10px" title="采集器状态（悬停看详情）">
-    {% for b in badges %}
-    <span title="{{ b.detail }}" class="cbadge cbadge-{{ b.css }}">{{ b.label }}</span>
-    {% endfor %}
-  </div>
+  {# 采集器徽章已移到全局顶栏（用户名左侧）—— 每个页面都能看到，不只这里 #}
 </div>
 
 <div class="grid g4">

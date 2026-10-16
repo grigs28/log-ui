@@ -19,6 +19,14 @@
       <a href="/settings"{% if _p.startswith('/settings') %} class="on"{% endif %}>设置</a>
     </nav>
     <span class="spacer"></span>
+    {% set _cb = coll_badges() %}
+    {% if _cb %}
+    <span class="hbadges">
+      {% for b in _cb %}
+      <span class="cbadge cbadge-{{ b.css }}" title="{{ b.detail }}">{{ b.label }}</span>
+      {% endfor %}
+    </span>
+    {% endif %}
     {% if user %}
       <span class="user">👤 <span>{{ user.display_name or user.username }}</span>{% if user.is_admin %} · 管理{% endif %}</span>
       <a href="/auth/logout" class="btn btn-muted" style="padding:4px 10px;font-size:12px">登出</a>
