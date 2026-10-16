@@ -719,6 +719,23 @@ def poll_logs() -> dict:
         h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
         h["disks"][dev] = ent
 
+    # 拔掉的盘不该继续显示：日志窗口里还留着它最后一次的记录，
+    # 于是「档案已清空（槽位空）」但「日志侧仍当成新发现的盘」挂在「未归档」里。
+    # 用与 prune_missing 完全相同的判据把它剔掉：
+    #   主机**正在被轮询**（最新记录不超过 HOST_ALIVE），且这块盘比主机最新记录
+    #   旧 GONE_AFTER 以上（连续好几轮都没报它了）→ 不在机器上了，连「未归档」都不给。
+    #   整机失联时不动手 —— 否则一台机器掉线，它的盘会全部消失。
+    now_ts = time.time()
+    for host, h in by_host.items():
+        ds = h.get("disks") or {}
+        if not ds:
+            continue
+        newest = max((e.get("ts") or 0) for e in ds.values())
+        if not newest or now_ts - newest > HOST_ALIVE:
+            continue
+        for dev in [d for d, e in ds.items() if newest - (e.get("ts") or 0) > GONE_AFTER]:
+            ds.pop(dev, None)
+
     for host, a in host_addr.items():
         h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
         h.update(a)
