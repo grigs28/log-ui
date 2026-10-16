@@ -33,10 +33,32 @@
 {% for s in servers %}
 <div class="card" id="srv-{{ s.name }}" style="margin-bottom:14px">
   <div class="srvhead">
+    <div class="srvrow1">
     <b class="srvname">{{ s.name }}</b>
     <span class="sbadge sbadge-{{ s.state }}"
           title="{{ s.name }}（{{ s.ip or s.addr_note or '无 IP' }}）&#10;机箱 {{ s.slots }} 槽：槽内已装 {{ s.installed }} · 空槽 {{ s.slots - s.installed }}{% if s.unfiled %}&#10;另有 {{ s.unfiled }} 块日志发现、未建档（不在槽内）{% endif %}&#10;{% if s.total_size %}合计容量 {{ s.total_size }}{% if s.size_known < s.installed_any %}（{{ s.size_known }}/{{ s.installed_any }} 块有容量数据）{% endif %}&#10;{% endif %}{% if s.media.SSD or s.media.HDD %}介质 SSD {{ s.media.SSD }} · HDD {{ s.media.HDD }}&#10;{% endif %}{% if s.sys_count %}系统盘 {{ s.sys_count }} 块&#10;{% endif %}异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
+    <span style="flex:1"></span>
+    {% if is_admin %}
+    {% if s.unfiled %}
+    <form method="post" action="/disks/archive" style="display:inline;margin:0">
+      <input type="hidden" name="server" value="{{ s.name }}">
+      <input type="hidden" name="back" value="{{ s.name }}">
+      <button class="btn" style="padding:2px 8px"
+              title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档：先填空槽位，填满后顺延槽号（事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
+    </form>
+    {% endif %}
+    {% if not s.auto %}
+    <form method="post" action="/disks/server/delete" style="display:inline;margin:0"
+          onsubmit="return confirm('删除 {{ s.name }} 的盘位档案？（日志仍会显示为「日志发现」）')">
+      <input type="hidden" name="name" value="{{ s.name }}">
+      <button class="btn btn-muted" style="padding:2px 8px">删档案</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    </div>
+    <div class="srvrow2">
     <span class="srvstat">{{ s.ip or s.addr_note or '无 IP' }}</span>
     {% if s.updated %}
     <span class="srvstat{% if s.stale %} stale{% endif %}"
@@ -83,25 +105,8 @@
     {% if s.unfiled and s.slots %}
     <span class="tag" title="日志里发现、机箱槽位里还没落档的盘（不占槽位数）。点「建档」按槽号顺序填进空槽">未建档 {{ s.unfiled }} 块</span>
     {% endif %}
-    <span style="flex:1"></span>
-    {% if is_admin %}
-    {% if s.unfiled %}
-    <form method="post" action="/disks/archive" style="display:inline;margin:0">
-      <input type="hidden" name="server" value="{{ s.name }}">
-      <input type="hidden" name="back" value="{{ s.name }}">
-      <button class="btn" style="padding:2px 8px"
-              title="把日志发现、档案里没有的 {{ s.unfiled }} 块盘落档：先填空槽位，填满后顺延槽号（事后可在「编辑盘位」改成真实槽号）">建档 {{ s.unfiled }} 盘</button>
-    </form>
-    {% endif %}
-    {% if not s.auto %}
-    <form method="post" action="/disks/server/delete" style="display:inline;margin:0"
-          onsubmit="return confirm('删除 {{ s.name }} 的盘位档案？（日志仍会显示为「日志发现」）')">
-      <input type="hidden" name="name" value="{{ s.name }}">
-      <button class="btn btn-muted" style="padding:2px 8px">删档案</button>
-    </form>
-    {% endif %}
-    {% endif %}
-  </div>
+    
+    </div>  </div>
 
   {# ---------- 视图工具条 ---------- #}
   {% if is_admin %}

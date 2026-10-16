@@ -444,15 +444,20 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .sbadge-err{  color:var(--led-err); background:color-mix(in srgb,var(--led-err) 14%,transparent); }
 .sbadge-none{ color:var(--ink-3);   background:transparent; }
 
-/* ── 服务器卡片头部 ─────────────────────────────────── */
-.srvhead{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; margin-bottom:10px; }
-.srvhead .srvname{ font-family:var(--mono); font-size:19px; font-weight:600; letter-spacing:-.01em; }
-.srvstat{ font-family:var(--mono); font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
-.srvstat b{ color:var(--ink); }
+/* ── 服务器卡片头部：两行 ───────────────────────────────
+   第一行大字 = 服务器名 + 状态徽章（+ 右侧操作按钮）
+   第二行小字 = 数据更新时间 + 各项统计
+   大字一眼认出是哪台、好不好；小字按需细看，不跟大字抢注意力。 */
+.srvhead{ margin-bottom:10px; }
+.srvrow1{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; }
+.srvrow1 .srvname{ font-family:var(--mono); font-size:20px; font-weight:600; letter-spacing:-.01em; }
+.srvrow2{ display:flex; align-items:center; gap:4px 14px; flex-wrap:wrap; margin-top:5px; }
+.srvstat{ font-family:var(--mono); font-size:13px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.srvstat b{ color:var(--ink-2); }
 /* 数据陈旧（超过 2 小时没新上报）：这行标黄，提醒面板上的状态可能不是现状 */
 .srvstat.stale{ color:var(--led-warn); }
-.srvhead .sbadge{ font-size:15px; font-weight:700; padding:4px 14px; gap:7px; }
-.srvhead .sbadge .dot{ width:10px; height:10px; }
+.srvrow1 .sbadge{ font-size:16px; font-weight:700; padding:5px 16px; gap:7px; }
+.srvrow1 .sbadge .dot{ width:10px; height:10px; }
 
 /* ── 视图工具条 ─────────────────────────────────────── */
 .baytools{ display:flex; align-items:center; gap:9px; flex-wrap:wrap;
