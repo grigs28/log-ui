@@ -449,6 +449,8 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .srvhead .srvname{ font-family:var(--mono); font-size:19px; font-weight:600; letter-spacing:-.01em; }
 .srvstat{ font-family:var(--mono); font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
 .srvstat b{ color:var(--ink); }
+/* 数据陈旧（超过 2 小时没新上报）：这行标黄，提醒面板上的状态可能不是现状 */
+.srvstat.stale{ color:var(--led-warn); }
 .srvhead .sbadge{ font-size:15px; font-weight:700; padding:4px 14px; gap:7px; }
 .srvhead .sbadge .dot{ width:10px; height:10px; }
 

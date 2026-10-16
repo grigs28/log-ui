@@ -882,6 +882,20 @@ def _span_of(dev: str, log_disks: dict, per_row: int = 0) -> int:
     return min(n, SPAN_MAX)
 
 
+def _ago(ts: float) -> str:
+    """相对时间：刚刚 / N 分钟前 / N.N 小时前 / N 天前。"""
+    if not ts:
+        return ""
+    d = max(0.0, time.time() - ts)
+    if d < 90:
+        return "刚刚"
+    if d < 5400:
+        return "%d 分钟前" % round(d / 60)
+    if d < 2 * 86400:
+        return "%.1f 小时前" % (d / 3600)
+    return "%d 天前" % round(d / 86400)
+
+
 def _pshort(pslots) -> str:
     """['252/0','252/1'] → 's0+s1'（去掉 EID，只留槽位号）。"""
     return "+".join("s" + p.split("/")[-1] for p in (pslots or []) if "/" in p)
@@ -1075,6 +1089,9 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     # 工具条里「共 N 排」用的是**横排口径**（每排 h_per_row），与当前面板是否竖排无关。
     # 按物理盘位算 —— 镜像盘占 2 个位置，「每排 8 × 3 排」就是 24 个盘位。
     h_rows = (-(-total_units // h_per_row)) if total_units else 0
+    # 数据更新时间：这台机器最近一次轮询上报是什么时候。
+    # 比 GONE_AFTER 还旧就该打个问号了 —— 面板上的状态可能已经不是现状。
+    up_ts = max((e.get("ts") or 0 for e in log_disks.values()), default=0)
     bad = sum(1 for x in disks if x["state"] == "err")
     unknown = sum(1 for x in disks if x["state"] == "warn")
     poll_errors = list((log_h or {}).get("poll_errors") or [])
@@ -1118,6 +1135,9 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "ignored": [{"dev": d, "size": z} for d, z in sorted(small.items())],
             "missing": missing,
             "media": media, "sys_count": sysn, "classes": classes,
+            "updated_ts": up_ts, "updated": _ago(up_ts),
+            "updated_at": (time.strftime("%m-%d %H:%M", time.localtime(up_ts)) if up_ts else ""),
+            "stale": bool(up_ts and time.time() - up_ts > GONE_AFTER),
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
             "unfiled": sum(1 for x in disks if x.get("unfiled")),

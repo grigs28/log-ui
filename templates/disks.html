@@ -38,6 +38,10 @@
           title="{{ s.name }}（{{ s.ip or s.addr_note or '无 IP' }}）&#10;机箱 {{ s.slots }} 槽：槽内已装 {{ s.installed }} · 空槽 {{ s.slots - s.installed }}{% if s.unfiled %}&#10;另有 {{ s.unfiled }} 块日志发现、未建档（不在槽内）{% endif %}&#10;{% if s.total_size %}合计容量 {{ s.total_size }}{% if s.size_known < s.installed_any %}（{{ s.size_known }}/{{ s.installed_any }} 块有容量数据）{% endif %}&#10;{% endif %}{% if s.media.SSD or s.media.HDD %}介质 SSD {{ s.media.SSD }} · HDD {{ s.media.HDD }}&#10;{% endif %}{% if s.sys_count %}系统盘 {{ s.sys_count }} 块&#10;{% endif %}异常 {{ s.bad }} · 未知 {{ s.unknown }}{% if s.unbuilt %}&#10;未建档：仅 hosts 文件有记录，尚无盘位数据{% endif %}{% for e in s.poll_errors %}&#10;轮询异常：{{ e }}{% endfor %}">
       <span class="dot {{ s.state if s.state in ('ok','err','warn') else '' }}"></span>{{ s.label }}</span>
     <span class="srvstat">{{ s.ip or s.addr_note or '无 IP' }}</span>
+    {% if s.updated %}
+    <span class="srvstat{% if s.stale %} stale{% endif %}"
+          title="这台机器最近一次轮询上报的时间：{{ s.updated_at }}{% if s.stale %}&#10;已超过 2 小时没有新数据，面板上的状态可能不是现状{% endif %}">更新 {{ s.updated }}</span>
+    {% endif %}
     {# 「共 N 槽」必须与工具条「总槽位数」同源（都只数有槽号的格子），
        未建档的日志发现盘单列，否则同一张卡片里两个槽数会对不上 #}
     <span class="srvstat" title="左侧是设备数（一个 RAID1 设备算一个），右侧是机箱物理盘位数">
