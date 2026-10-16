@@ -864,6 +864,9 @@ MIN_SIZE_TB = 0.064       # 64G
 # 自动清理「已不在机器上」的盘（见 prune_missing）
 GONE_AFTER = 2 * 3600     # 相对该主机最新记录，超过这么久没上报 → 认为已拔掉
                           # （轮询约半小时~1 小时一轮，2 小时 ≈ 连续 2~4 轮都没报它）
+STALE_AFTER = 26 * 3600   # 面板数据算「陈旧」的阈值。轮询基础节奏是**每天 00:30 一次**
+                          # （其余是零散的手工运行），所以 26 小时 = 漏掉了当天的定时那一次。
+                          # 定 2 小时会让一整天大部分时间都标黄，纯噪音。
 HOST_ALIVE = 12 * 3600    # 该主机最新记录超过这么久没更新 → 整机失联，不动手
 
 
@@ -1137,7 +1140,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "media": media, "sys_count": sysn, "classes": classes,
             "updated_ts": up_ts, "updated": _ago(up_ts),
             "updated_at": (time.strftime("%m-%d %H:%M", time.localtime(up_ts)) if up_ts else ""),
-            "stale": bool(up_ts and time.time() - up_ts > GONE_AFTER),
+            "stale": bool(up_ts and time.time() - up_ts > STALE_AFTER),
             "bad": bad, "unknown": unknown,
             "poll_errors": poll_errors,
             "unfiled": sum(1 for x in disks if x.get("unfiled")),

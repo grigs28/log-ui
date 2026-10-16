@@ -40,7 +40,7 @@
     <span class="srvstat">{{ s.ip or s.addr_note or '无 IP' }}</span>
     {% if s.updated %}
     <span class="srvstat{% if s.stale %} stale{% endif %}"
-          title="这台机器最近一次轮询上报的时间：{{ s.updated_at }}{% if s.stale %}&#10;已超过 2 小时没有新数据，面板上的状态可能不是现状{% endif %}">更新 {{ s.updated }}</span>
+          title="这台机器最近一次轮询上报的时间：{{ s.updated_at }}{% if s.stale %}&#10;已超过 26 小时没有新数据 —— 当天的定时轮询可能没跑成，面板状态已不是现状{% endif %}">更新 {{ s.updated }}</span>
     {% endif %}
     {# 「共 N 槽」必须与工具条「总槽位数」同源（都只数有槽号的格子），
        未建档的日志发现盘单列，否则同一张卡片里两个槽数会对不上 #}
