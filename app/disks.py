@@ -741,9 +741,14 @@ def poll_logs() -> dict:
         h.update(a)
     for host, errs in host_errors.items():
         h = by_host.setdefault(host, {"ip": "", "disks": {}, "poll_errors": []})
-        # 同样只留最近一批主机级失败
-        newest = max(e[0] for e in errs)
-        h["poll_errors"] = [b for ep, b in sorted(errs) if ep >= newest - BURST_SLACK]
+        # 只留最近一批主机级失败
+        newest_err = max(e[0] for e in errs)
+        batch = [b for ep, b in sorted(errs) if ep >= newest_err - BURST_SLACK]
+        # 还要跟「最近一次**成功**」比：这台机器后来查成功过，早先那次失败就是陈旧的。
+        # 否则一天前失败过一次，之后一直正常，徽章却永远挂着「轮询异常」。
+        # （主机整体查不通时不会产生盘记录，所以「盘记录比错误新」就说明后来成功了）
+        newest_ok = max((e.get("ts") or 0) for e in (h.get("disks") or {}).values()) if h.get("disks") else 0
+        h["poll_errors"] = [] if newest_ok > newest_err else batch
 
     data = {"by_host": by_host, "runs": runs[:12]}
     _logs_cache["data"], _logs_cache["ts"] = data, now
