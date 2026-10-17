@@ -23,6 +23,7 @@ from . import collectors
 from . import disks
 from . import actions
 from . import notify
+from . import portal
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -100,6 +101,14 @@ def csrf_protect(request: Request):
     origin = request.headers.get("origin")
     if origin and origin != f"{request.url.scheme}://{request.url.netloc}":
         raise HTTPException(status_code=403, detail="CSRF check failed")
+
+
+@app.get("/portal/status")
+def portal_status(request: Request):
+    """网管中心各服务的健康状态，给全局顶栏的健康灯用（路径与网关一致，前端脚本不用改）。"""
+    if not _require_user(request):
+        return Response("Unauthorized", status_code=401)
+    return portal.status()
 
 
 @app.get("/favicon.ico")

@@ -1,0 +1,24 @@
+/* 网管中心全局顶栏（网关 sub_filter 注入，应用零侵入） */
+#nm-topbar{position:fixed;top:0;left:0;right:0;height:44px;z-index:2147483000;
+  background:linear-gradient(180deg,#141b2e 0%,#0d1220 100%);
+  border-bottom:1px solid rgba(122,162,255,.25);display:flex;align-items:center;
+  padding:0 16px;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:13px;box-sizing:border-box;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#nm-topbar *{box-sizing:border-box;margin:0;padding:0}
+#nm-topbar a{text-decoration:none;color:#8ea3c8;padding:0 10px;height:44px;
+  display:inline-flex;align-items:center;transition:color .15s}
+#nm-topbar a:hover{color:#fff}
+#nm-topbar .nm-brand{color:#7aa2ff;font-weight:700;font-size:14px;padding-right:14px;
+  border-right:1px solid rgba(122,162,255,.25);margin-right:6px}
+#nm-topbar .nm-cur{color:#fff !important;border-bottom:2px solid #7aa2ff}
+#nm-topbar .nm-right{margin-left:auto;display:flex;align-items:center;gap:2px}
+#nm-topbar .nm-user{color:#c8d4ea;padding:0 10px}
+#nm-topbar .nm-logout{color:#e89090}
+#nm-topbar .nm-logout:hover{color:#ff6b6b}
+body{padding-top:44px !important}
+#nm-topbar .nm-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  margin-left:5px;background:#5a6272;vertical-align:middle;transition:background .3s}
+#nm-topbar .nm-dot.ok{background:#2ad468;box-shadow:0 0 5px rgba(42,212,104,.8)}
+#nm-topbar .nm-dot.bad{background:#e83838;box-shadow:0 0 5px rgba(232,56,56,.9);
+  animation:nm-pulse 1.4s ease-in-out infinite}
+@keyframes nm-pulse{0%,100%{opacity:1}50%{opacity:.35}}

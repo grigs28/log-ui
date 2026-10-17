@@ -2,6 +2,43 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [2.2.0] - 2026-10-17
+
+### Added
+- **网管中心全局顶栏** —— 从 `/opt/NetBox`（.6 的网管中心）原样搬过来，
+  形态与视觉完全一致：44px 固定条、`#7aa2ff` 蓝、每个系统名后一颗健康灯、
+  当前系统高亮、右侧 门户/状态/退出。链接走 `.6/go/<key>` 继承 SSO 免密。
+
+  ```
+  ⌂ 网管中心  NetBox● LibreNMS● Zabbix● PortGrid● NetDisco● Semaphore● [LOG-UI]   门户 状态 退出
+  ```
+
+  只改了两处（不改就不是「搬过来」而是「另做一套」）：
+
+  | 改动 | 原因 |
+  |---|---|
+  | 网关地址 `location.hostname` → 写死 `192.168.0.6` | log-ui 在 .14，按 location 推算会算成 .14，所有 `/go/*` 都会 404 |
+  | 当前页高亮：外部系统按**主机名**判 | LOG-UI 是外部系统（无端口），原来按端口判永远高亮不上 |
+
+- `app/portal.py` + `GET /portal/status`：**健康状态由 log-ui 后端自己探**。
+  顶栏脚本原本 `fetch('/portal/status')` 同源取值，在 .6 上是 nginx 代理过去的；
+  而在 .14 上跨域拿不到（实测 `.6/portal/status` **302 需登录**，且无 CORS、不带 .6 的 cookie）。
+
+  - 并行探 `.6` 的 6 个端口（8100-8105），**1.2 秒超时**、`ThreadPoolExecutor` 并发，
+    避免一台挂了把请求拖到 6×超时
+  - 判据与网关一致：**有响应即算活着**（302 跳登录页也算正常）
+  - 60 秒缓存，与顶栏刷新周期一致
+  - `logui` 恒为 true（能渲染这一页就说明它活着）
+
+### 保留
+- **log-ui 自己的采集器灯（vector / cobian / victorialogs）没动**，仍在下方 header 里。
+  两条栏各管一层：上面是**网管中心 7 个系统**的健康，下面是**日志链路 3 个组件**的健康。
+
+### 布局
+- `header` 的 `sticky top` 由 0 改为 **44px**，正好接在顶栏下面不重叠；
+  卡片回跳的 `scroll-margin-top` 由 60px 改为 104px（44 顶栏 + 60 页头）
+
+## [2.1.7] - 2026-10-17
 ## [2.1.7] - 2026-10-17
 
 ### Changed

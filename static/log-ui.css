@@ -67,8 +67,9 @@ code,pre{ font-family:var(--mono); }
 /* ── 顶栏 ───────────────────────────────────────────── */
 header{
   background:var(--panel); padding:0 18px; display:flex; align-items:center; gap:20px;
-  border-bottom:1px solid var(--rule); flex-wrap:wrap; position:sticky; top:0; z-index:10;
-  min-height:46px;
+  border-bottom:1px solid var(--rule); flex-wrap:wrap; position:sticky;
+  top:44px;                 /* 让开网管中心顶栏（fixed，高 44px） */
+  z-index:10; min-height:46px;
 }
 header .title{
   font-family:var(--mono); font-weight:600; font-size:14px; letter-spacing:.06em;
@@ -287,7 +288,7 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 }
 
 /* 页面回跳时的目标卡片：闪一下，并留出吸顶页头的高度 */
-.card[id^="srv-"]{ scroll-margin-top:60px; }
+.card[id^="srv-"]{ scroll-margin-top:104px; }   /* 44 顶栏 + 60 页头 */
 @keyframes cardFocus{
   0%  { box-shadow:inset 3px 0 0 0 var(--led-loc); }
   100%{ box-shadow:inset 3px 0 0 0 transparent; }

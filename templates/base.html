@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>{% block title %}log-ui{% endblock %}</title>
   <link rel="stylesheet" href="/static/log-ui.css">
+  {# 网管中心全局顶栏：与 .6 上那条同一套 CSS/JS（只改了网关地址与当前页高亮） #}
+  <link rel="stylesheet" href="/static/nm-topbar.css">
 </head>
 <body class="theme-{{ theme or 'dark' }}">
   <header>
@@ -35,6 +37,8 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <div id="nm-topbar"></div>
+  <script src="/static/nm-topbar.js"></script>
   {% block scripts %}{% endblock %}
   <footer style="text-align:center;padding:14px;color:var(--muted);font-size:11px;border-top:1px solid var(--border)">
     <a href="/changelog" style="color:inherit;text-decoration:underline dotted">log-ui v{{ version() or '?' }}</a> · <a href="https://github.com/grigs28/log-ui" style="color:inherit">GitHub</a>
