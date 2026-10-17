@@ -108,7 +108,7 @@ main{ padding:16px 18px 40px; max-width:1560px; margin:0 auto; animation:fadeInO
 .card > h3{
   margin:0 0 10px; padding-bottom:8px; border-bottom:1px solid var(--rule-2);
   font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-3);
+  text-transform:uppercase; color:var(--ink-2);
 }
 
 /* 行内标题：和表单/徽章并排的那种，不做丝印表头（不要下边框和外边距） */
@@ -142,7 +142,7 @@ table{ width:100%; border-collapse:collapse; }
 th,td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule-2);
        vertical-align:middle; font-size:13px; }
 th{
-  color:var(--ink-3); font-weight:600; font-size:10px; letter-spacing:.13em;
+  color:var(--ink-2); font-weight:600; font-size:10px; letter-spacing:.13em;
   text-transform:uppercase; font-family:var(--mono); position:sticky; top:0;
   background:var(--panel); z-index:2; border-bottom:1px solid var(--rule);
 }
@@ -195,7 +195,7 @@ header .cbadge::before{ width:6px; height:6px; }
 /* ── 表单 ───────────────────────────────────────────── */
 form .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 label{
-  color:var(--ink-3); font-size:10px; font-weight:600; display:block; margin-bottom:4px;
+  color:var(--ink-2); font-size:10px; font-weight:600; display:block; margin-bottom:4px;
   letter-spacing:.11em; text-transform:uppercase; font-family:var(--mono);
 }
 select,input[type=text],input[type=number],textarea{
@@ -266,7 +266,9 @@ table.kv td:first-child{ width:110px; }
           font-family:var(--mono); padding:7px 0; }
 
 /* ── 杂项 ───────────────────────────────────────────── */
-.meta{ color:var(--ink-3); font-size:12px; }
+/* 说明性文字不用弱化色 —— 它是需要读的内容，不是装饰。
+   弱化色只留给格子里的微缩字（槽号/设备名的辅行），那里密，再亮就糊了 */
+.meta{ color:var(--ink-2); font-size:12px; }
 .meta code{ color:var(--ink-2); background:var(--panel-2); padding:1px 5px; border-radius:2px; }
 .status-line{ display:flex;align-items:center;gap:6px; }
 details summary{ cursor:pointer; color:var(--ink-2); font-size:12px; font-family:var(--mono); }
@@ -458,8 +460,8 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .srvrow1{ display:flex; align-items:center; gap:13px; flex-wrap:wrap; }
 .srvrow1 .srvname{ font-family:var(--mono); font-size:20px; font-weight:600; letter-spacing:-.01em; }
 .srvrow2{ display:flex; align-items:center; gap:4px 14px; flex-wrap:wrap; margin-top:5px; }
-.srvstat{ font-family:var(--mono); font-size:13px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
-.srvstat b{ color:var(--ink-2); }
+.srvstat{ font-family:var(--mono); font-size:13px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.srvstat b{ color:var(--ink); }
 /* 数据陈旧（超过 2 小时没新上报）：这行标黄，提醒面板上的状态可能不是现状 */
 .srvstat.stale{ color:var(--led-warn); }
 .srvrow1 .sbadge{ font-size:16px; font-weight:700; padding:5px 16px; gap:7px; }
