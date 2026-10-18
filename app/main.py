@@ -459,6 +459,14 @@ def disks_history(request: Request, server: str = "", dev: str = "", days: int =
     return JSONResponse(disks.history(server, dev, days))
 
 
+@app.get("/disks/raw")
+def disks_raw(request: Request, server: str = "", dev: str = "", ts: str = ""):
+    """某个时间点那一批 poll 原始行（点历史记录时展开）。"""
+    if not _require_user(request):
+        return Response("Unauthorized", status_code=401)
+    return JSONResponse(disks.raw_lines(server, dev, ts))
+
+
 @app.get("/backup")
 def backup_page(request: Request):
     """备份状态：.98 rclone / .28/.79 Cobian + 每日巡检。"""

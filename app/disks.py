@@ -10,6 +10,7 @@
     日志为辅：日志能对上的盘自动带出归属与状态，对不上的照常显示手录内容。
   - 匹配键用「设备名」（/dev/sda）。将来 osd.poll.sh 上报槽位后可改为槽位优先。
 """
+import calendar
 import json
 import os
 import re
@@ -971,6 +972,51 @@ _HIST_DEV_RE = re.compile(r'^/dev/[A-Za-z0-9._-]{1,32}$')
 _MSG_TS_RE = re.compile(r'\[(?:异常|盘点)\]\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
 _hist_cache = {}          # (server, dev, days) -> (ts, payload)
 _HIST_TTL = 60
+_raw_cache = {}           # (server, dev, ts) -> (ts, payload)
+
+
+def raw_lines(server: str, dev: str, ts: str, window: int = 7200) -> dict:
+    """取某个时间点那一批 poll 原始行（[盘点] + [异常]）。
+
+    osd-poll 的消息里带本地时间（CST），VL 的 `_time` 是真实 UTC
+    （syslog 转换时减了 8 小时）。所以按「本地时间 − 8h」定位，
+    窗口放宽到 ±2 小时，再用消息里的时间戳做精确匹配。
+    """
+    server = (server or "").strip()
+    dev = (dev or "").strip()
+    ts = (ts or "").strip()
+    if not _HIST_HOST_RE.match(server) or not _HIST_DEV_RE.match(dev):
+        return {"lines": [], "note": "参数不合法"}
+    if not re.match(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$', ts):
+        return {"lines": [], "note": "时间格式应为 YYYY-MM-DD HH:MM:SS"}
+    key = (server, dev, ts)
+    now = time.time()
+    hit = _raw_cache.get(key)
+    if hit and now - hit[0] < _HIST_TTL:
+        return hit[1]
+    try:
+        center = calendar.timegm(time.strptime(ts, "%Y-%m-%d %H:%M:%S")) - 8 * 3600
+    except Exception:
+        return {"lines": [], "note": "时间解析失败"}
+    expr = f'app_name:osd-poll AND _msg:~"{server}" AND _msg:~"{dev}"'
+    rows = vl.query_logs(expr=expr, limit=300,
+                         start=int(center - window), end=int(center + window))
+    lines, seen = [], set()
+    for r in rows:
+        msg = _ANSI_RE.sub("", r.get("_msg") or "").strip()
+        if not msg or ts not in msg:
+            continue
+        if msg in seen:
+            continue
+        seen.add(msg)
+        tag = ("异常" if "[异常]" in msg else
+               "盘点" if "[盘点]" in msg else "警告" if "[警告]" in msg else "")
+        lines.append({"time": ts, "tag": tag, "text": msg})
+    lines.sort(key=lambda x: (x["tag"] != "盘点", x["text"]))
+    note = "" if lines else "没有找到这一时刻的原始日志（可能已过 180 天保留期）"
+    payload = {"lines": lines, "note": note, "server": server, "dev": dev, "ts": ts}
+    _raw_cache[key] = (now, payload)
+    return payload
 
 
 def _hist_text(msg: str) -> str:

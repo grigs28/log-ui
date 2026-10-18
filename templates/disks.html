@@ -295,6 +295,35 @@
   </div>
 </div>
 
+{# 盘格详情弹窗：左键单击盘格打开；悬停浮层照旧（两者共存） #}
+<div id="baymodal" class="baymodal" hidden>
+  <div class="baymodal-box">
+    <div class="baymodal-head">
+      <span class="dot" id="bm-dot"></span>
+      <b id="bm-title">—</b>
+      <span class="sbadge" id="bm-badge">
+        <span class="dot"></span><span class="sblabel"></span>
+      </span>
+      <span class="spacer"></span>
+      <button type="button" class="btn-muted" id="bm-close" style="padding:2px 10px">关闭</button>
+    </div>
+    <div class="baymodal-body">
+      <div class="bm-info" id="bm-info"></div>
+      <div class="bm-hist">
+        <div class="bm-h">历史告警 · 近 30 天
+          <span class="meta" style="text-transform:none;letter-spacing:0">点日期看原始 poll 行</span></div>
+        <div id="bm-hist-list" class="bm-hist-list">读取中…</div>
+      </div>
+    </div>
+    <div class="baymodal-foot">
+      <button type="button" class="btn" data-act="check" id="bm-check">重测</button>
+      <button type="button" class="btn btn-muted" data-act="led-fail" id="bm-led">亮灯</button>
+      <span class="spacer"></span>
+      <span class="meta">Esc / 点遮罩也能关</span>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ---- 单盘动作：重测 / 亮灯 ----
    格子上悬停出现两个按钮，点了起后台任务 → 弹窗显示进度条 + 结论 + 实时输出。
@@ -461,7 +490,10 @@
       ctx = { server: bay.closest('.baymap').dataset.server,
               dev: bay.dataset.dev, slots: bay.dataset.slot || '' };
     } else if (btn.dataset.server) {
-      ctx = { server: btn.dataset.server, dev: '', slots: '' };   // 整机
+      // 整机按钮（工具条）或详情弹窗里的单盘按钮：
+      // 弹窗带 data-dev/data-slot，整机按钮没有
+      ctx = { server: btn.dataset.server, dev: btn.dataset.dev || '',
+              slots: btn.dataset.slot || '' };
     } else {
       return;
     }
@@ -776,6 +808,139 @@
       cell.addEventListener('dragstart', hide);
     });
   window.addEventListener('scroll', hide, true);
+})();
+
+/* 盘格详情弹窗：左键单击盘格打开；悬停浮层照旧（两者共存）。
+   空槽不弹；拖动不算点击；格内「重测/亮灯」按钮不弹。
+   历史记录带日期的，点日期再取那一批 poll 原始行。 */
+(function () {
+  var modal = document.getElementById('baymodal');
+  if (!modal) return;
+  var title = document.getElementById('bm-title'),
+      dot = document.getElementById('bm-dot'),
+      badge = document.getElementById('bm-badge'),
+      info = document.getElementById('bm-info'),
+      hist = document.getElementById('bm-hist-list'),
+      btnCheck = document.getElementById('bm-check'),
+      btnLed = document.getElementById('bm-led');
+  var cur = null, lastDrag = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function close() { modal.hidden = true; cur = null; }
+
+  function renderInfo(tip, state) {
+    var lines = (tip || '').split('\n').filter(function (x) { return x !== ''; });
+    if (lines.length && lines[lines.length - 1].indexOf('拖动可调整位置') >= 0) lines.pop();
+    var i = -1;
+    for (var k = 0; k < lines.length; k++) {
+      if (lines[k].indexOf('状态：') === 0) { i = k; break; }
+    }
+    var head = i >= 0 ? lines.slice(0, i) : lines;
+    var st = i >= 0 ? lines.slice(i).join('\n') : '';
+    var h = '';
+    head.forEach(function (line) {
+      var p = line.indexOf('：');
+      if (p > 0 && p < 12) {
+        h += '<div class="bm-row"><span class="bm-k">' + esc(line.slice(0, p)) + '</span>' +
+             '<span class="bm-v">' + esc(line.slice(p + 1)) + '</span></div>';
+      } else {
+        h += '<div class="bm-row"><span class="bm-v">' + esc(line) + '</span></div>';
+      }
+    });
+    if (st) h += '<div class="bm-status bm-' + state + '">' + esc(st) + '</div>';
+    return h;
+  }
+
+  function renderHistory(server, dev, d) {
+    var rows = (d && d.entries) || [];
+    if (!rows.length) {
+      hist.innerHTML = '<span class="meta">近 ' + ((d && d.days) || 30) + ' 天没有警告记录</span>';
+      return;
+    }
+    hist.innerHTML = rows.map(function (x) {
+      var lv = (x.level === 'err') ? 'err' : 'warn';
+      var when = (x.first && x.last && x.first !== x.last)
+        ? esc(x.first) + ' ~ ' + esc(x.last) + ' · ' + x.count + ' 次'
+        : esc(x.last || '');
+      return '<div class="bm-hist-row ' + lv + '">' +
+             '<i class="sev sev-' + lv + '"></i>' +
+             '<span class="txt">' + esc(x.text) + '</span>' +
+             '<span class="bm-hist-when" data-ts="' + esc(x.last || '') + '">' + when + '</span>' +
+             '</div><pre class="bm-raw" hidden></pre>';
+    }).join('');
+    Array.prototype.forEach.call(hist.querySelectorAll('.bm-hist-when'), function (el) {
+      el.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var pre = el.closest('.bm-hist-row').nextElementSibling;
+        if (!pre || pre.tagName !== 'PRE') return;
+        if (!pre.hidden) { pre.hidden = true; return; }
+        pre.hidden = false;
+        pre.textContent = '读取中…';
+        var ts = el.dataset.ts;
+        fetch('/disks/raw?server=' + encodeURIComponent(server) +
+              '&dev=' + encodeURIComponent(dev) + '&ts=' + encodeURIComponent(ts))
+          .then(function (r) { return r.json(); })
+          .then(function (r) {
+            if (!cur || cur.server !== server || cur.dev !== dev) return;
+            pre.textContent = (r.lines && r.lines.length)
+              ? r.lines.map(function (x) { return x.text; }).join('\n')
+              : (r.note || '没有原始日志');
+          })
+          .catch(function () { pre.textContent = '读取失败'; });
+      });
+    });
+  }
+
+  function open(cell) {
+    var map = cell.closest('.baymap');
+    var server = map && map.dataset.server;
+    var dev = cell.dataset.dev;
+    if (!server || !dev) return;
+    cur = { server: server, dev: dev };
+    var state = cell.dataset.state || '';
+    var lv = (state === 'ok' || state === 'warn' || state === 'err') ? state : '';
+    title.textContent = server + ' · ' + dev;
+    dot.className = 'dot ' + lv;
+    badge.className = 'sbadge sbadge-' + state;
+    badge.querySelector('.dot').className = 'dot ' + lv;
+    badge.querySelector('.sblabel').textContent =
+      ({ ok: '正常', warn: '警告', err: '错误', none: '无数据' })[state] || '';
+    info.innerHTML = renderInfo(cell.dataset.tip || '', state);
+    hist.textContent = '读取中…';
+    [btnCheck, btnLed].forEach(function (b) {
+      b.dataset.server = server;
+      b.dataset.dev = dev;
+      b.dataset.slot = cell.dataset.slot || '';
+    });
+    modal.hidden = false;
+    fetch('/disks/history?server=' + encodeURIComponent(server) +
+          '&dev=' + encodeURIComponent(dev) + '&days=30')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (cur && cur.server === server && cur.dev === dev) renderHistory(server, dev, d);
+      })
+      .catch(function () { hist.textContent = '历史读取失败'; });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (Date.now() - lastDrag < 400) return;           // 刚拖完，不算点击
+    if (e.target.closest && e.target.closest('[data-act]')) return;
+    var cell = e.target.closest && e.target.closest('.bay-live');
+    if (!cell || !cell.dataset.dev) return;             // 空槽不弹
+    open(cell);
+  });
+  document.addEventListener('dragstart', function () { lastDrag = Date.now(); }, true);
+  document.addEventListener('dragend', function () { lastDrag = Date.now(); }, true);
+
+  document.getElementById('bm-close').addEventListener('click', close);
+  modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) close();
+  });
 })();
 </script>
 {% endblock %}

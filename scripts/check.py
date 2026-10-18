@@ -102,6 +102,8 @@ FEATURE_MARKERS = {
         ("物理盘位属性", "data-dev"),
         ("单盘历史浮层", "bay-tip"),
         ("历史接口", "/disks/history"),
+        ("盘格详情弹窗", "baymodal"),
+        ("原始日志行", "/disks/raw"),
         ("使用时间", "d.hours_text"),
         ("SSD寿命", "d.life_text"),
     ],
@@ -132,6 +134,7 @@ FEATURE_MARKERS = {
         ("悬浮卡等级灯", ".bay-tip-row .sev-err"),
         ("备份网格", ".bak-grid"),
         ("备份日志表", ".bak-logrow"),
+        ("详情弹窗", ".baymodal-box"),
     ],
 }
 
@@ -255,6 +258,8 @@ def smoke_routes() -> int:
             ("GET",  "/backup/logs?days=7&source=98&level=err", None),
             ("GET",  "/disks/history?server=t-nod01&dev=/dev/sdb&days=30", None),
             ("GET",  "/disks/history?server=../x&dev=bogus", None),
+            ("GET",  "/disks/raw?server=t-nod01&dev=/dev/sdb&ts=2026-10-18%2013:40:50", None),
+            ("GET",  "/disks/raw?server=../x&dev=bogus&ts=bad", None),
         ]
         bad = 0
         for method, url, data in cases:
