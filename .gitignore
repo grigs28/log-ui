@@ -14,3 +14,6 @@ __pycache__/
 
 # 运行时数据（本地用户权限 + 登录审计）
 config/users.json
+
+# 未纠正读错误基线（运行时数据）
+config/uncorrected.json

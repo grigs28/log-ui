@@ -164,7 +164,7 @@
       <div class="bay bay-{{ d.state }} bay-live{% if d.slot is none %} bay-unfiled{% endif %}{% if d.span > 1 %}{% if s.mode == 'v' %} bay-vspan{% else %} bay-hspan{% endif %}{% endif %}{% if d.right_bar %} bay-end{% endif %}" draggable="true"
            {% if d.span > 1 %}{% if s.mode == 'v' %}style="grid-row:span {{ d.span }}"{% elif d.place > 1 %}style="grid-column:span {{ d.place }}"{% endif %}{% endif %}
            data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
-           data-span="{{ d.span }}"
+           data-span="{{ d.span }}" data-state="{{ d.state }}"
            {%- if d.dev %} data-slot{{ 's' if d.pslots|length > 1 else '' }}="{{ d.pshort }}"{% endif %}
            data-tip="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} —— 物理槽位 {{ d.pshort }}（{{ d.span }} 块盘）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}{% if d.hours_text %}&#10;使用 {{ d.hours_text }}{% endif %}{% if d.life_text %}&#10;寿命 {{ d.life_text }}{% endif %}{% if d.grown_text %}&#10;增长缺陷 {{ d.grown_text }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}{% if d.manual %}&#10;⚑ 手工检测于 {{ d.manual_at }}（状态取自检测结果，非轮询）{% endif %}&#10;（拖动可调整位置；鼠标停在格子上，底部出现「重测」「亮灯」）">
         <div class="bay-slot">{% if d.slot is none %}<span class="bay-unfiled-mark">未归档</span>{% elif d.span > 1 %}{{ d.bay }}-{{ d.bay + d.span - 1 }}{% else %}{{ d.bay }}{% endif %}</div>
@@ -745,9 +745,16 @@
     var dev = cell.dataset.dev;
     if (!server || !dev) return;
     cur = server + '|' + dev;
-    // 静态信息按行渲染：含 ✗ 的行标红、含 ⚠ 的行标黄
+    // 静态信息按行渲染：「状态」行跟随整格等级（未纠正读错误可能只是黄）；
+    // 其余行含 ✗ 标红、含 ⚠ 标黄
+    var state = cell.dataset.state || '';
     var lines = (cell.dataset.tip || '').split('\n').map(function (line) {
-      var cls = line.indexOf('✗') >= 0 ? ' err' : (line.indexOf('⚠') >= 0 ? ' warn' : '');
+      var cls = '';
+      if (line.indexOf('状态：') === 0) {
+        cls = state === 'err' ? ' err' : (state === 'warn' ? ' warn' : '');
+      } else {
+        cls = line.indexOf('✗') >= 0 ? ' err' : (line.indexOf('⚠') >= 0 ? ' warn' : '');
+      }
       return '<div class="bay-tip-line' + cls + '">' + esc(line) + '</div>';
     }).join('');
     card.innerHTML = '<div class="bay-tip-static">' + lines + '</div>'

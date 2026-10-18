@@ -218,6 +218,10 @@ async def watchdog() -> None:
                     n = _d.prune_missing()
                     if n:
                         _log_heal(f"自动清理: {n} 块已不在机器上的盘（盘位保留）")
+                    # 未纠正读错误基线：第一次见/下降时更新，增长时刻意不动
+                    n2 = _d.refresh_uncorrected()
+                    if n2:
+                        _log_heal(f"未纠正读错误基线更新: {n2} 块盘")
                 except Exception as e:
                     _log_heal(f"清理磁盘档案异常: {e}")
         except Exception as e:

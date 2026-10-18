@@ -10,6 +10,8 @@
     日志为辅：日志能对上的盘自动带出归属与状态，对不上的照常显示手录内容。
   - 匹配键用「设备名」（/dev/sda）。将来 osd.poll.sh 上报槽位后可改为槽位优先。
 """
+import json
+import os
 import re
 import time
 
@@ -226,12 +228,14 @@ def _severity(msg: str) -> str:
 
 # 严重（错误 / 红灯）
 _ERR_PAT = re.compile(
-    r"坏块|未纠正|UECC|介质错误:\s*[1-9]|预测失败:\s*[1-9]|"
+    r"坏块|UECC|介质错误:\s*[1-9]|预测失败:\s*[1-9]|"
     r"超阈值|测速挂起|OSD\s*(?:down|掉线)|HEALTH_ERR",
     re.I)
 # 一般（报警 / 黄灯）
+# 注意：SAS 未纠正读错误**默认是警告**（累计值多半是旧账）；
+#       只有比基线**增长**时才升级成错误 —— 见 uncorr_level()。
 _WARN_PAT = re.compile(
-    r"速度极慢|卡顿|速度偏慢|slow\s*ops|HEALTH_WARN|增长缺陷|"
+    r"未纠正|速度极慢|卡顿|速度偏慢|slow\s*ops|HEALTH_WARN|增长缺陷|"
     r"延迟|latency|smartctl\s*安装失败|SMART\s*未知",
     re.I)
 
@@ -242,6 +246,90 @@ _hosts_cache = {"ts": 0.0, "rows": []}
 _logs_cache = {"ts": 0.0, "data": None}
 _HOSTS_TTL = 600      # hosts 文件缓存 10 分钟
 _LOGS_TTL = 120       # 日志解析缓存 2 分钟
+
+# 未纠正读错误基线：{"host|/dev/sdx": {"n": N, "ts": 时间戳}}
+# 作用：绝对值 >0 只报警（累计值多半是旧账）；**比基线增长**才升级成错误。
+UNCORR_PATH = BASE / "config" / "uncorrected.json"
+_uncorr_cache = {"mtime": None, "data": None}
+_UNCORR_RE = re.compile(r"未纠正[^:：]*[:：]\s*(\d+)")
+
+
+def _load_uncorr() -> dict:
+    try:
+        mtime = UNCORR_PATH.stat().st_mtime
+    except OSError:
+        return {}
+    if _uncorr_cache["data"] is not None and _uncorr_cache["mtime"] == mtime:
+        return _uncorr_cache["data"]
+    try:
+        d = json.loads(UNCORR_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        d = {}
+    if not isinstance(d, dict):
+        d = {}
+    _uncorr_cache["data"], _uncorr_cache["mtime"] = d, mtime
+    return d
+
+
+def _save_uncorr(d: dict) -> bool:
+    try:
+        UNCORR_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = str(UNCORR_PATH) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=1, sort_keys=True)
+        os.replace(tmp, UNCORR_PATH)
+        _uncorr_cache["mtime"] = None
+        return True
+    except Exception:
+        return False
+
+
+def uncorr_level(host: str, dev: str, n) -> str:
+    """未纠正读错误的显示等级。
+
+    - 没有值 → ''
+    - 第一次见 / 与基线相同 → 'warn'（累计值，多半是旧账）
+    - **比基线增长** → 'err'（数据完整性正在受影响）
+    """
+    if n is None:
+        return ""
+    base = (_load_uncorr().get(f"{host}|{dev}") or {}).get("n")
+    if base is None:
+        return "warn"
+    try:
+        return "err" if int(n) > int(base) else "warn"
+    except (TypeError, ValueError):
+        return "warn"
+
+
+def refresh_uncorrected() -> int:
+    """把本轮看到的值写进基线（watchdog 调用，不在 GET 里写文件）。
+
+    只在「第一次见」或「数值下降（换盘/计数复位）」时更新基线；
+    数值增长时刻意不动 —— 让红色一直挂着，直到换盘或人工清理。
+    """
+    logs = poll_logs()
+    d = dict(_load_uncorr())
+    changed = 0
+    for host, h in (logs.get("by_host") or {}).items():
+        for dev, e in (h.get("disks") or {}).items():
+            n = e.get("uncorrected")
+            if n is None:
+                continue
+            key = f"{host}|{dev}"
+            old = d.get(key)
+            oldn = None
+            if isinstance(old, dict):
+                try:
+                    oldn = int(old.get("n"))
+                except (TypeError, ValueError):
+                    oldn = None
+            if oldn is None or int(n) < oldn:
+                d[key] = {"n": int(n), "ts": int(time.time())}
+                changed += 1
+    if changed and _save_uncorr(d):
+        return changed
+    return 0
 
 
 # ---------------- 布局（可编辑，持久化） ----------------
@@ -786,6 +874,12 @@ def poll_logs() -> dict:
                 if sev and body not in seen:
                     seen.add(body)
                     (ent["issues"] if sev == "err" else ent["warns"]).append(body)
+                    m = _UNCORR_RE.search(body)
+                    if m:
+                        try:
+                            ent["uncorrected"] = int(m.group(1))
+                        except ValueError:
+                            pass
             else:
                 ent["status"] = body          # 同批内取最后一条盘点为准
             if osd and osd != "?":
@@ -808,6 +902,9 @@ def poll_logs() -> dict:
                     break
         ent["issue"] = ent["issues"][0] if ent["issues"] else ""
         ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
+        # 未纠正读错误：绝对值只报警，比基线增长才升级为错误
+        if ent.get("uncorrected") is not None:
+            ent["uncorr_level"] = uncorr_level(host, dev, ent["uncorrected"])
         # poll 在盘点结论后追加的附加信息：SSD 寿命 / 增长缺陷 / 通电使用时间
         ent["hours"] = parse_hours(ent.get("status"))
         ent["life_text"] = parse_life(ent.get("status"))
@@ -1026,6 +1123,8 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
     s = (ent.get("status") or "").strip()
     if ent.get("issue"):
         return "err"                      # 有 err 级明细
+    if ent.get("uncorr_level") == "err":
+        return "err"                      # 未纠正读错误比基线增长
     g = ent.get("grown_max") or 0
     if g > 100:
         return "err"                      # 增长缺陷超阈值
