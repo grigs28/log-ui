@@ -31,6 +31,8 @@ _COB_ERR = ('_msg:~"无法创建目录" OR _msg:~"无法复制文件" OR '
 _COB_SUM_RE = re.compile(r'任务“([^”]+)”.*?错误数[：:]\s*(\d+)')
 _INSPECT_OK_RE = re.compile(r'备份巡检全绿:\s*(\d+)/(\d+)')
 _INSPECT_NG_RE = re.compile(r'备份巡检发现\s*(\d+)\s*项失败')
+# 日志里的 ANSI 色码（与 disks.py 同一套）
+_ANSI_RE = re.compile(r'(?:\x1b|#033)?\[\d+(?:;\d+)*m')
 
 
 def _epoch(iso: str) -> int:
@@ -139,12 +141,28 @@ def cobian_jobs() -> list:
             job["note"] = "无任务汇总行，按错误明细判断"
         es = sorted(cur["errors"], key=lambda r: r.get("_time") or "")
         job["note"] += f" · 近 30 天错误明细 {len(es)} 条"
+        # 没有汇总行时，last 用「最新一条日志」而不是「最后一条错误」——
+        # 否则 .79 会一直显示最后一次错误的时间（10-10），看起来像没在跑。
+        latest = _q(f'app_name:cobian-backup AND log_source:"{src}"', 1, 30)
+        act_epoch = 0
+        if latest:
+            act_epoch = _epoch(latest[0].get("_time"))
+            act = re.sub(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}\s*', '',
+                         latest[0].get("_msg") or "").strip()
+            if not job["summary"]:
+                job["summary"] = "最近活动：" + act[:90]
+            if not job["last"]:
+                job["last"] = _local(latest[0].get("_time"), "cobian-backup")
         if es:
             newest = _epoch(es[-1].get("_time"))
-            job["last"] = job["last"] or _local(es[-1].get("_time"), "cobian-backup")
+            job["last_error"] = _local(es[-1].get("_time"), "cobian-backup")
             if job["state"] == "none":
                 # 没有汇总行：最近 24 小时有错误才报警，否则视为历史噪音
                 job["state"] = "warn" if time.time() - newest < 86400 else "ok"
+        # 没有汇总行的源：超过 48 小时没有任何日志 → 备份可能没跑
+        if not cur["tasks"] and act_epoch and time.time() - act_epoch > 48 * 3600:
+            job["state"] = "warn"
+            job["note"] += " · 超过 48h 没有新日志，备份可能未运行"
         for r in es[-5:]:
             job["errors"].append({"ts": _local(r.get("_time"), "cobian-backup"),
                                   "text": (r.get("_msg") or "").strip()})
@@ -175,6 +193,75 @@ def inspect() -> dict:
             if abs(_epoch(r.get("_time")) - _epoch(newest)) <= 3600:
                 out["failures"].append((r.get("_msg") or "").strip())
     return out
+
+
+# ---------------- 全部警告以上日志 ----------------
+
+# 每个源：显示名 + 基础查询 + 条数上限
+_LOG_SOURCES = {
+    "98": ("98 · ls-bak08", 'app_name:rclone-backup AND '
+                            '(level:error OR _msg:~"BACKUP_ERROR" OR _msg:~"SYNC_ERROR")', 600),
+    "28": ("28 · Cobian", 'app_name:cobian-backup AND log_source:"192.168.0.28" AND '
+                          '(_msg:~"无法" OR _msg:~"拒绝访问" OR '
+                          '(_msg:~"错误数：" AND NOT _msg:~"错误数：0") OR '
+                          '_msg:~"I/O 设备错误" OR _msg:~"网络错误" OR _msg:~"来源目录")', 600),
+    "79": ("79 · Cobian", 'app_name:cobian-backup AND log_source:"192.168.0.79" AND '
+                          '(_msg:~"无法" OR _msg:~"拒绝访问" OR '
+                          '(_msg:~"错误数：" AND NOT _msg:~"错误数：0") OR '
+                          '_msg:~"I/O 设备错误" OR _msg:~"网络错误" OR _msg:~"来源目录")', 600),
+    "inspect": ("巡检", 'app_name:bak-status AND (level:error OR _msg:~"失败")', 200),
+}
+
+_LOG_NOISE = re.compile(r'检查新版本|已删除，因为原始文件不存在', re.I)
+_LOG_ERR = re.compile(
+    r'BACKUP_ERROR|SYNC_ERROR|无法创建目录|无法复制文件|拒绝访问|I/O 设备错误|'
+    r'来源目录.*不存在|网络错误|失败项|发现\s*\d+\s*项失败|错误数[：:]\s*[1-9]', re.I)
+_LOG_WARN = re.compile(r'another_run_in_progress|速度极慢|卡顿', re.I)
+
+
+def _classify(msg: str, level: str, source: str) -> str:
+    if _LOG_NOISE.search(msg or ""):
+        return ""
+    if source == "inspect" and "全绿" in (msg or ""):
+        return ""                       # 巡检全绿是 level=warning，但不是问题
+    if _LOG_ERR.search(msg or "") or (level or "").lower() in (
+            "err", "error", "crit", "critical", "alert", "emerg"):
+        return "err"
+    if _LOG_WARN.search(msg or "") or (level or "").lower() in ("warn", "warning"):
+        return "warn"
+    return ""
+
+
+def logs(days: int = 30, source: str = "", level: str = "") -> dict:
+    """备份相关源的「警告及以上」日志。source/level 为空表示不过滤。"""
+    try:
+        days = max(1, min(int(days or 30), 180))
+    except (TypeError, ValueError):
+        days = 30
+    keys = [source] if source in _LOG_SOURCES else list(_LOG_SOURCES)
+    rows, seen = [], set()
+    for key in keys:
+        label, expr, limit = _LOG_SOURCES[key]
+        for r in _q(expr, limit, days):
+            msg = _ANSI_RE.sub("", r.get("_msg") or "").strip()
+            if not msg:
+                continue
+            lv = _classify(msg, r.get("level") or "", key)
+            if not lv or (level and lv != level):
+                continue
+            ep = _epoch(r.get("_time"))
+            if key == "98" and ep and ep < FIX_TS:
+                ep += 8 * 3600          # 修复前的双重时区校正
+            k = (key, ep, msg)
+            if k in seen:
+                continue
+            seen.add(k)
+            rows.append({"epoch": ep, "ts": _local(r.get("_time"), "rclone-backup" if key == "98" else ""),
+                         "source": label, "skey": key, "level": lv, "text": msg})
+    rows.sort(key=lambda x: x["epoch"], reverse=True)
+    return {"rows": rows[:500], "total": len(rows), "days": days,
+            "source": source if source in _LOG_SOURCES else "",
+            "level": level if level in ("warn", "err") else ""}
 
 
 # ---------------- 汇总 ----------------

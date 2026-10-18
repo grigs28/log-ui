@@ -471,6 +471,18 @@ def backup_page(request: Request):
     )
 
 
+@app.get("/backup/logs")
+def backup_logs(request: Request, days: int = 30, source: str = "", level: str = ""):
+    """备份相关源的「警告及以上」全部日志。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    return templates.TemplateResponse(
+        request, "backup_logs.html",
+        {"user": user, "theme": _theme(user), **backup.logs(days, source, level)},
+    )
+
+
 @app.post("/disks/server/add")
 def disks_server_add(request: Request, name: str = Form(""), ip: str = Form(""),
                      per_row: int = Form(0),

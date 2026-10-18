@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}备份日志 · log-ui{% endblock %}
+
+{% block content %}
+<div class="bak-page">
+
+  <div class="bak-head">
+    <h2>备份日志</h2>
+    <span class="meta">警告及以上 · 共 {{ total }} 条{% if total > rows|length %}（显示最近 {{ rows|length }} 条）{% endif %}</span>
+    <span class="spacer"></span>
+    <a class="btn btn-muted" href="/backup">← 返回备份</a>
+  </div>
+
+  <form method="get" action="/backup/logs" class="card bak-filter">
+    <label>时间
+      <select name="days">
+        {% for d in [7, 30, 90, 180] %}
+        <option value="{{ d }}" {{ 'selected' if d == days else '' }}>近 {{ d }} 天</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>来源
+      <select name="source">
+        <option value="">全部</option>
+        {% for k, v in [('98','98 · ls-bak08'), ('28','28 · Cobian'), ('79','79 · Cobian'), ('inspect','巡检')] %}
+        <option value="{{ k }}" {{ 'selected' if k == source else '' }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>级别
+      <select name="level">
+        <option value="">全部</option>
+        <option value="warn" {{ 'selected' if level == 'warn' else '' }}>仅警告</option>
+        <option value="err" {{ 'selected' if level == 'err' else '' }}>仅错误</option>
+      </select>
+    </label>
+    <button>筛选</button>
+  </form>
+
+  <div class="card">
+    {% if rows %}
+    <div class="bak-logtable">
+      <div class="bak-loghead">
+        <span class="bak-log-ts">时间</span>
+        <span class="bak-log-src">来源</span>
+        <span class="bak-log-lv">级别</span>
+        <span class="bak-log-msg">内容</span>
+      </div>
+      {% for r in rows %}
+      <div class="bak-logrow bak-logrow-{{ r.level }}">
+        <span class="bak-log-ts mono">{{ r.ts }}</span>
+        <span class="bak-log-src">{{ r.source }}</span>
+        <span class="bak-log-lv">
+          <span class="dot {{ 'err' if r.level == 'err' else 'warn' }}"></span>
+          {{ '错误' if r.level == 'err' else '警告' }}
+        </span>
+        <span class="bak-log-msg">{{ r.text }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="meta">这个时间范围内没有警告及以上的备份日志。</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

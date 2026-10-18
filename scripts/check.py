@@ -113,7 +113,10 @@ FEATURE_MARKERS = {
                               ("退出统一登录", "/auth/logout")],
     "templates/backup.html": [("每日巡检", "每日巡检"),
                               ("任务卡", "bak-job"),
-                              ("错误明细", "bak-events")],
+                              ("错误明细", "bak-events"),
+                              ("全部日志链接", "/backup/logs")],
+    "templates/backup_logs.html": [("筛选表单", "bak-filter"),
+                                   ("日志表", "bak-logrow")],
     "static/users_ui.js": [("权限下拉", "本地权限"),
                            ("保存端点", "/portal/users/save"),
                            ("删除按钮", "/portal/users/delete"),
@@ -128,6 +131,7 @@ FEATURE_MARKERS = {
         ("竖排行高统一", "grid-auto-rows"),
         ("悬浮卡等级灯", ".bay-tip-row .sev-err"),
         ("备份网格", ".bak-grid"),
+        ("备份日志表", ".bak-logrow"),
     ],
 }
 
@@ -247,6 +251,8 @@ def smoke_routes() -> int:
             ("GET",  "/servers", None),
             ("GET",  "/settings", None),
             ("GET",  "/backup", None),
+            ("GET",  "/backup/logs", None),
+            ("GET",  "/backup/logs?days=7&source=98&level=err", None),
             ("GET",  "/disks/history?server=t-nod01&dev=/dev/sdb&days=30", None),
             ("GET",  "/disks/history?server=../x&dev=bogus", None),
         ]
