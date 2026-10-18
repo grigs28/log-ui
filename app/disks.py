@@ -1242,6 +1242,28 @@ def _issue_rows(ent) -> list:
             for t in ((ent or {}).get("issues") or [])]
 
 
+def issue_level(host: str, dev: str, issue: str, status: str = "") -> str:
+    """单条问题 / 检测结论的等级：'err' | 'warn' | 'ok'。
+
+    与 poll 侧同一套：未纠正/速度慢只报警，比基线增长或坏块/超阈值才错误。
+    """
+    issue = (issue or "").strip()
+    sev = _severity(issue) if issue else ""
+    mm = _UNCORR_RE.search(issue)
+    if mm:
+        try:
+            if uncorr_level(host, dev or "", int(mm.group(1))) == "err":
+                sev = "err"
+        except ValueError:
+            pass
+    st = (status or "").strip()
+    if not sev and st.startswith("✗"):
+        sev = "err"
+    if not sev and st.startswith("⚠"):
+        sev = "warn"
+    return sev or "ok"
+
+
 def _status_text(ent) -> str:
     """盘位显示的短状态：异常时给出主因，否则回显日志原文。
 
@@ -1370,14 +1392,34 @@ def _apply_manual(disks_: list, host: str, manual: dict) -> None:
         if m.get("ts", 0) <= (x.get("_poll_ts") or 0):
             continue
         st = (m.get("status") or "").strip()
-        if m.get("issue") or st.startswith("✗"):
-            x["state"], x["label"] = "err", "异常"
-        elif st.startswith("⚠"):
+        issue = (m.get("issue") or "").strip()
+        # 与 poll 侧同一套分档：速度慢/未纠正（未增长）/增长缺陷只报警，
+        # 坏块/未纠正增长/超阈值才报错。不能只看「有没有 ✗」。
+        sev = issue_level(host, x.get("dev") or "", issue, st)
+        if sev == "err":
+            x["state"], x["label"] = "err", "错误"
+        elif sev == "warn":
             x["state"], x["label"] = "warn", "警告"
-        elif st.startswith("✓"):
+        else:
             x["state"], x["label"] = "ok", "健康"
-        x["status"] = m.get("issue") or st
-        x["issues"] = [m["issue"]] if m.get("issue") else []
+        x["status"] = issue or st
+        x["issues"] = [issue] if issue else []
+        x["issue_rows"] = ([{"text": issue, "hint": issue_hint(issue)}] if issue else [])
+        # 手动检测只报 ✗ 明细；poll 里的增长缺陷（✓ 行）不会出现在检测结果里，
+        # 保留它，避免重测后这块信息消失。
+        gt = (x.get("grown_text") or "").strip()
+        if gt and "增长缺陷" not in issue:
+            try:
+                gmax = max(int(v) for v in gt.split("/") if v.strip().isdigit())
+            except ValueError:
+                gmax = 0
+            if gmax > 0:
+                txt = f"增长缺陷 {gt}（阈值 100 内）"
+                x["issues"] = x["issues"] + [txt]
+                x["issue_rows"] = x["issue_rows"] + [
+                    {"text": txt, "hint": issue_hint(txt)}]
+                if x["state"] == "ok":
+                    x["state"], x["label"] = "warn", "警告"
         x["manual"] = int(m.get("ts", 0))
         x["manual_at"] = time.strftime("%m-%d %H:%M", time.localtime(m.get("ts", 0)))
         x["manual_status"] = st

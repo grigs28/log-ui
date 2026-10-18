@@ -432,7 +432,7 @@
 
       if (act === 'check' || act === 'check-host') {
         var v = j.verdict || {}, st = v.status || '';
-        var cls = st.indexOf('✗') === 0 ? 'err' : (st.indexOf('⚠') === 0 ? 'warn' : (ok ? 'ok' : 'err'));
+        var cls = v.level || (st.indexOf('✗') === 0 ? 'err' : (st.indexOf('⚠') === 0 ? 'warn' : (ok ? 'ok' : 'err')));
         bar(100, cls);
         elVerd.textContent = st ? ('结论：' + st) : '未解析到状态行';
         elVerd.className = 'actverdict ' + cls;

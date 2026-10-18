@@ -214,13 +214,17 @@ def _run(job_id: str, action: str, host: str, dev: str, seconds: int) -> None:
             job["output"] = out[:OUT_MAX]
             if action in ("check", "check-host"):
                 if action == "check":
-                    job["verdict"] = _parse_verdict(out)
+                    v = _parse_verdict(out)
+                    if v:
+                        v["level"] = disks.issue_level(
+                            host, dev, v.get("issue", ""), v.get("status", ""))
+                    job["verdict"] = v
                     _save_manual_check(host, dev, job["verdict"], out)
                 else:
                     allv = _parse_all(out)          # {dev: {status, issue}}
                     for d, v in allv.items():
                         _save_manual_check(host, d, v, out)
-                    job["verdict"] = _summarize(allv)
+                    job["verdict"] = _summarize(allv, host)
                     job["disks"] = allv
     except Rejected as e:
         with _LOCK:
@@ -307,13 +311,16 @@ def _parse_all(out: str) -> dict:
     return res
 
 
-def _summarize(allv: dict) -> dict:
+def _summarize(allv: dict, host: str = "") -> dict:
     """整机检测的汇总结论。"""
     if not allv:
         return {}
     ok = sum(1 for v in allv.values() if v["status"].startswith("✓"))
     warn = sum(1 for v in allv.values() if v["status"].startswith("⚠"))
     err = sum(1 for v in allv.values() if v["status"].startswith("✗"))
+    # 汇总等级按问题内容判（未纠正/速度慢只报警），不是按 ✗ 字符数
+    levels = [disks.issue_level(host, d, v.get("issue", ""), v.get("status", ""))
+              for d, v in allv.items()]
     parts = [f"{len(allv)} 块盘"]
     if ok:
         parts.append(f"✓ 健康 {ok}")
@@ -322,7 +329,9 @@ def _summarize(allv: dict) -> dict:
     if warn:
         parts.append(f"⚠ 警告 {warn}")
     return {"status": " · ".join(parts),
-            "issue": next((v["issue"] for v in allv.values() if v["issue"]), "")}
+            "issue": next((v["issue"] for v in allv.values() if v["issue"]), ""),
+            "level": ("err" if levels.count("err") else
+                      "warn" if levels.count("warn") else "ok")}
 
 
 def _parse_verdict(out: str) -> dict:
