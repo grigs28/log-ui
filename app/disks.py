@@ -968,7 +968,7 @@ def poll_logs() -> dict:
 
 _HIST_HOST_RE = re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 _HIST_DEV_RE = re.compile(r'^/dev/[A-Za-z0-9._-]{1,32}$')
-_MSG_TS_RE = re.compile(r'\[异常\]\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
+_MSG_TS_RE = re.compile(r'\[(?:异常|盘点)\]\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
 _hist_cache = {}          # (server, dev, days) -> (ts, payload)
 _HIST_TTL = 60
 
@@ -1014,14 +1014,24 @@ def history(server: str, dev: str, days: int = 30, limit: int = 20) -> dict:
     groups = {}
     for rec in logs:
         msg = _ANSI_RE.sub("", rec.get("_msg") or "").strip()
-        if "[异常]" not in msg:
-            continue
-        raw = _hist_text(msg)                 # 结论（保留 状态:/✓/⚠/✗ 前缀）
-        sev = _severity(raw)                  # ← 用结论判定，不能用整行
-        if not sev:
-            continue
-        text = re.sub(r"^状态:\s*", "", raw).strip()   # 「状态: ✗ 异常」本身没信息量
-        if not text:
+        if "[异常]" in msg:
+            raw = _hist_text(msg)                 # 结论（保留 状态:/✓/⚠/✗ 前缀）
+            sev = _severity(raw)                  # ← 用结论判定，不能用整行
+            if not sev:
+                continue
+            text = re.sub(r"^状态:\s*", "", raw).strip()   # 「状态: ✗ 异常」本身没信息量
+            if not text:
+                continue
+        elif "[盘点]" in msg:
+            # 增长缺陷 0<N≤100 只写在盘点状态行，没有独立异常行 —— 补进历史。
+            # >100 有单独的 ✗「超阈值」异常行，这里不重复。
+            g = parse_grown(msg)
+            gm = grown_max(msg)
+            if not g or not gm or not (0 < gm <= 100):
+                continue
+            sev = "warn"
+            text = f"增长缺陷 {g}（阈值 100 内）"
+        else:
             continue
         m = _MSG_TS_RE.search(msg)
         ts = m.group(1) if m else (rec.get("_time") or "")[:16].replace("T", " ")
