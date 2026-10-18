@@ -78,6 +78,15 @@
 <div class="settings-full">
 
   <div class="card">
+    <h3>用户与权限</h3>
+    <p class="meta">记录每一次登录尝试，成功与被拒绝都在。默认档与网管中心一致：只有 yz-login 管理员能进。</p>
+    <div id="usertbl"></div>
+    <h4 style="margin:18px 0 8px;font-size:13px;letter-spacing:.04em">登录记录
+      <span class="meta" style="font-weight:400">最近 100 条 · 修改权限后在线会话立即失效</span></h4>
+    <div id="loginlog" class="mono" style="font-size:12px;line-height:1.9;max-height:320px;overflow:auto"></div>
+    <script src="/static/users_ui.js"></script>
+  </div>
+  <div class="card">
     <h3>日志保留期</h3>
     {% if reterr %}
     <p class="alert alert-err"><b>保存失败（已回滚）：</b>{{ reterr }}</p>

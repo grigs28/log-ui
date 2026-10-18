@@ -99,7 +99,7 @@
     {% endif %}
     {% if s.ignored %}
     <span class="srvstat" style="opacity:.7"
-          title="容量小于 64G，不当硬盘看（多为虚拟块设备）&#10;{% for g in s.ignored %}{{ g.dev }} {{ g.size }}&#10;{% endfor %}">忽略 {{ s.ignored|length }} 个&lt;64G</span>
+          title="容量小于 100G，不当硬盘看（多为虚拟块设备）&#10;{% for g in s.ignored %}{{ g.dev }} {{ g.size }}&#10;{% endfor %}">忽略 {{ s.ignored|length }} 个&lt;100G</span>
     {% endif %}
     {% if s.auto %}<span class="tag">日志发现</span>{% endif %}
     {% if s.unfiled and s.slots %}
@@ -166,7 +166,7 @@
            data-dev="{{ d.dev }}" data-osd="{{ d.osd }}" data-note="{{ d.note }}" data-size="{{ d.size }}"
            data-span="{{ d.span }}"
            {%- if d.dev %} data-slot{{ 's' if d.pslots|length > 1 else '' }}="{{ d.pshort }}"{% endif %}
-           title="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} —— 物理槽位 {{ d.pshort }}（{{ d.span }} 块盘）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}{% if d.manual %}&#10;⚑ 手工检测于 {{ d.manual_at }}（状态取自检测结果，非轮询）{% endif %}&#10;（拖动可调整位置；鼠标停在格子上，底部出现「重测」「亮灯」）">
+           data-tip="槽 {{ d.slot if d.slot is not none else '未编号' }}{% if d.dev %} · {{ d.dev }}{% endif %}&#10;{% if d.size %}容量 {{ d.size }}{% endif %}{% if d.media %} · {{ d.media }}{% endif %}{% if d.role %}&#10;角色 {{ d.role }}{% endif %}{% if d.carrier %}&#10;承载 {{ d.carrier }}{% if d.pslots %} —— 物理槽位 {{ d.pshort }}（{{ d.span }} 块盘）{% endif %}{% endif %}{% if d.dclass %}&#10;设备类 {{ d.dclass }}{% endif %}{% if d.hours_text %}&#10;使用 {{ d.hours_text }}{% endif %}{% if d.life_text %}&#10;寿命 {{ d.life_text }}{% endif %}&#10;{% if d.osd %}OSD osd.{{ d.osd }}{% else %}无 OSD{% endif %}{% if d.note %}&#10;备注：{{ d.note }}{% endif %}&#10;状态：{% if d.issues %}{{ d.issues|join('&#10;      ') }}{% elif d.known %}{{ d.status }}{% elif d.dev %}日志无此盘记录（未验证）{% else %}空槽（未装盘）{% endif %}{% if d.unfiled %}&#10;此盘来自日志，尚未建档{% endif %}{% if d.manual %}&#10;⚑ 手工检测于 {{ d.manual_at }}（状态取自检测结果，非轮询）{% endif %}&#10;（拖动可调整位置；鼠标停在格子上，底部出现「重测」「亮灯」）">
         <div class="bay-slot">{% if d.slot is none %}<span class="bay-unfiled-mark">未归档</span>{% elif d.span > 1 %}{{ d.bay }}-{{ d.bay + d.span - 1 }}{% else %}{{ d.bay }}{% endif %}</div>
         <div class="bay-dev">{% if d.dev %}{{ d.dev.replace('/dev/','') }}{% elif d.slot is not none %}<span class="bay-empty">空</span>{% endif %}</div>
         {% if d.dev %}
@@ -675,6 +675,100 @@
       f.submit();
     });
   });
+})();
+
+/* 盘格悬浮卡：静态信息 + 单盘历史告警（懒加载，60 秒缓存）
+   —— 静态部分原来走原生 title；原生 tooltip 不能异步加载，所以换成自定义浮层。 */
+(function () {
+  var card = document.createElement('div');
+  card.className = 'bay-tip';
+  card.style.display = 'none';
+  document.body.appendChild(card);
+  var cache = {};               // "server|dev" -> {ts, data}
+  var timer = null, cur = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function hide() {
+    clearTimeout(timer); timer = null; cur = null;
+    card.style.display = 'none';
+  }
+  function place(cell) {
+    var r = cell.getBoundingClientRect();
+    var w = 430, h = card.offsetHeight || 220;
+    var x = r.right + 10;
+    if (x + w > window.innerWidth - 8) x = r.left - w - 10;
+    if (x < 8) x = 8;
+    var y = r.top;
+    if (y + h > window.innerHeight - 8) y = Math.max(8, window.innerHeight - h - 8);
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+  }
+  function render(server, dev, d) {
+    var list = card.querySelector('.bay-tip-list');
+    if (!list || cur !== server + '|' + dev) return;
+    var e = (d && d.entries) || [];
+    if (!e.length) {
+      list.innerHTML = '<span class="bay-tip-none">近 ' + (d.days || 30) + ' 天没有警告记录</span>';
+      return;
+    }
+    list.innerHTML = e.map(function (x) {
+      var lv = (x.level === 'err') ? 'err' : 'warn';
+      var when = (x.first && x.last && x.first !== x.last)
+        ? x.first.slice(5) + ' ~ ' + x.last.slice(5) + ' · ' + x.count + ' 次'
+        : (x.last || '').slice(5);
+      return '<div class="bay-tip-row ' + lv + '"><i class="sev sev-' + lv + '"></i>'
+        + '<span class="txt">' + esc(x.text) + '</span>'
+        + '<span class="when">' + esc(when) + '</span></div>';
+    }).join('');
+  }
+  function load(server, dev) {
+    var key = server + '|' + dev;
+    var c = cache[key];
+    if (c && Date.now() - c.ts < 60000) { render(server, dev, c.data); return; }
+    var url = '/disks/history?server=' + encodeURIComponent(server)
+            + '&dev=' + encodeURIComponent(dev) + '&days=30';
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      cache[key] = { ts: Date.now(), data: d };
+      render(server, dev, d);
+    }).catch(function () {
+      var list = card.querySelector('.bay-tip-list');
+      if (list) list.innerHTML = '<span class="bay-tip-none">历史读取失败</span>';
+    });
+  }
+  function show(cell) {
+    var map = cell.closest('.baymap');
+    var server = map && map.dataset.server;
+    var dev = cell.dataset.dev;
+    if (!server || !dev) return;
+    cur = server + '|' + dev;
+    // 静态信息按行渲染：含 ✗ 的行标红、含 ⚠ 的行标黄
+    var lines = (cell.dataset.tip || '').split('\n').map(function (line) {
+      var cls = line.indexOf('✗') >= 0 ? ' err' : (line.indexOf('⚠') >= 0 ? ' warn' : '');
+      return '<div class="bay-tip-line' + cls + '">' + esc(line) + '</div>';
+    }).join('');
+    card.innerHTML = '<div class="bay-tip-static">' + lines + '</div>'
+      + '<div class="bay-tip-h">历史告警 · 近 30 天</div>'
+      + '<div class="bay-tip-list">读取中…</div>';
+    card.style.display = 'block';
+    place(cell);
+    load(server, dev);
+  }
+
+  Array.prototype.forEach.call(
+    document.querySelectorAll('.baymap .bay-live[data-dev]'), function (cell) {
+      if (!cell.dataset.dev) return;
+      cell.addEventListener('mouseenter', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { show(cell); }, 280);
+      });
+      cell.addEventListener('mouseleave', hide);
+      cell.addEventListener('dragstart', hide);
+    });
+  window.addEventListener('scroll', hide, true);
 })();
 </script>
 {% endblock %}

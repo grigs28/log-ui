@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>无法登录 · log-ui</title>
+  <link rel="stylesheet" href="/static/log-ui.css">
+  <style>
+    .deny-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .deny-card{max-width:520px;width:100%;text-align:center;padding:34px 28px}
+    .deny-led{width:10px;height:10px;border-radius:50%;background:var(--led-err);
+      margin:0 auto 14px;box-shadow:0 0 12px var(--led-err)}
+    .deny-card h1{font-size:19px;margin:0 0 10px;letter-spacing:.02em}
+    .deny-reason{color:var(--ink-2);margin:0 0 6px}
+    .deny-card .btnrow{justify-content:center;margin-top:22px}
+    .deny-card .meta{margin-top:20px}
+  </style>
+</head>
+<body class="theme-dark">
+  <div class="deny-wrap">
+    <div class="card deny-card">
+      <div class="deny-led"></div>
+      <h1>无法登录 log-ui</h1>
+      <p class="deny-reason">{{ reason }}</p>
+      {% if username %}<p class="meta mono">账号：{{ username }}</p>{% endif %}
+      <div class="btnrow">
+        <a class="btn" href="/auth/logout">退出统一登录</a>
+        <a class="btn btn-muted" href="http://192.168.0.6/portal">返回网管中心</a>
+      </div>
+      <p class="meta">如果认为这是误判，请联系管理员在「设置 → 用户与权限」中调整。</p>
+    </div>
+  </div>
+</body>
+</html>

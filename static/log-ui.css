@@ -520,9 +520,37 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
          background:var(--bg); color:var(--ink-2); font-family:var(--mono); }
 .actfoot{ padding:8px 13px; border-top:1px solid var(--rule-2); font-family:var(--mono); }
 
+/* ── 盘格悬浮卡（静态信息 + 单盘历史告警） ─────────────
+   替代原生 title：原生 tooltip 不能异步加载历史，所以自绘一层。
+   pointer-events:none —— 它只是「读」的，不挡鼠标，也不抢拖动。 */
+.bay-tip{
+  position:fixed; z-index:9000; width:430px; max-width:calc(100vw - 20px);
+  background:var(--panel-2); border:1px solid var(--rule); border-radius:var(--r);
+  padding:13px 15px; font-size:13.5px; line-height:1.72; color:var(--ink);
+  box-shadow:0 10px 28px rgba(0,0,0,.45); pointer-events:none;
+}
+.bay-tip-static{ white-space:pre-line; color:var(--ink); font-size:13.5px; }
+.bay-tip-line.warn{ color:var(--led-warn); }
+.bay-tip-line.err{  color:var(--led-err); }
+.bay-tip-h{ margin-top:12px; padding-top:9px; border-top:1px solid var(--rule);
+  color:var(--ink-2); font-family:var(--mono); font-size:11px;
+  letter-spacing:.08em; text-transform:uppercase; }
+.bay-tip-list{ margin-top:2px; }
+.bay-tip-none{ color:var(--ink-2); }
+.bay-tip-row{ display:flex; gap:8px; align-items:flex-start; margin-top:7px; }
+.bay-tip-row .sev{ width:8px; height:8px; border-radius:50%; flex:0 0 8px;
+  margin-top:6px; background:var(--led-off); }
+.bay-tip-row .sev-warn{ background:var(--led-warn); box-shadow:0 0 6px var(--led-warn); }
+.bay-tip-row .sev-err{  background:var(--led-err);  box-shadow:0 0 6px var(--led-err); }
+.bay-tip-row .txt{ flex:1; min-width:0; word-break:break-word; color:var(--ink); font-size:13px; }
+.bay-tip-row.warn .txt{ color:var(--led-warn); }
+.bay-tip-row.err  .txt{ color:var(--led-err); }
+.bay-tip-row .when{ color:var(--ink-2); white-space:nowrap;
+  font-family:var(--mono); font-size:11.5px; }
+
 /* ── 打印 ───────────────────────────────────────────── */
 @media print{
-  header, footer, .baytools, .bay-acts, .ordersave, button, .btn{ display:none !important; }
+  header, footer, .baytools, .bay-acts, .ordersave, button, .btn, .bay-tip{ display:none !important; }
   body{ background:#fff; color:#000; }
   .card,.bay{ border-color:#999; }
 }

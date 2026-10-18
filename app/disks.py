@@ -119,21 +119,100 @@ def _fmt_tb(v: float) -> str:
     return f"{v:.1f}T"
 
 
-def _severity(msg: str) -> str:
-    """一条 [异常] 行的严重度：'' = 不是问题 | 'warn' | 'err'。
+# poll 在盘点结论后面追加的附加信息（2026-10-18 起）：
+#   ✓ 健康 · SSD寿命 89%/99% · 使用 64745h
+# 解析成结构化字段，鼠标悬浮卡单独成行显示；状态行里不再重复。
+_HOURS_RE = re.compile(
+    r"(?:使用时间|使用|通电时间|通电|运行时间|运行|Power[_ ]?On[_ ]?Hours)"
+    r"[:：]?\s*(\d[\d,]*)\s*(?:h|H|小时)?", re.I)
+_LIFE_RE = re.compile(r"SSD\s*寿命\s*[:：]?\s*(\d{1,3}\s*%?(?:\s*/\s*\d{1,3}\s*%?)?)", re.I)
+# 状态行里属于「附加信息」的段：SSD寿命 / 使用时间 / 通电 …（鼠标卡片单独成行）
+_AUX_PART = re.compile(
+    r"^(?:SSD\s*寿命|使用时间|使用|通电时间|通电|运行时间|运行)"
+    r"\s*[:：]?\s*\d", re.I)
 
-    poll 的 [异常] 行里其实混了三类东西，只看「有没有 ✗」会大量误报：
+
+def _strip_aux(text: str) -> str:
+    """把状态行按「·」拆开，去掉附加信息段，保留结论。
+
+        '✓ 健康 · SSD寿命 89%/99% · 使用 64745h'  →  '✓ 健康'
+    """
+    parts = [p.strip() for p in (text or "").split("·")]
+    return " · ".join(p for p in parts if p and not _AUX_PART.match(p))
+
+
+def parse_hours(text: str):
+    """从状态文本里取通电小时数，取不到返回 None。"""
+    m = _HOURS_RE.search(text or "")
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def parse_life(text: str) -> str:
+    """从状态文本里取 SSD 寿命（可能是 89% 或 89%/99%），取不到返回 ''。"""
+    m = _LIFE_RE.search(text or "")
+    if not m:
+        return ""
+    return re.sub(r"\s+", "", m.group(1))
+
+
+def _fmt_hours(h) -> str:
+    """64745 → '64,745h（7.4 年）'。"""
+    if h is None:
+        return ""
+    try:
+        h = int(h)
+    except (TypeError, ValueError):
+        return ""
+    if h >= 8760:
+        return f"{h:,}h（{h / 8760:.1f} 年）"
+    if h >= 24:
+        return f"{h:,}h（{h // 24} 天）"
+    return f"{h:,}h"
+
+
+def _severity(msg: str) -> str:
+    """一条 [异常] 行的严重度：'' = 不是问题 | 'warn' = 报警 | 'err' = 错误。
+
+    分档原则（2026-10-18 用户要求）：**一般的性能/趋势问题只报警，严重的才错误**。
+
+    | 级别 | 判据 |
+    |---|---|
+    | err  | 坏块 / 未纠正读错误 / UECC / 介质错误>0 / 预测失败>0 / 增长缺陷超阈值 / 测速挂起 / OSD 掉线 / HEALTH_ERR |
+    | warn | 速度极慢(卡顿) / 速度偏慢 / slow ops / HEALTH_WARN / 增长缺陷(未超阈值) / 延迟 / smartctl 读不到 |
+
+    poll 的 [异常] 行里混了几类东西，只看「有没有 ✗」会大量误报：
       ✓ 开头  —— storcli 卡层「正常」指标（「✓ 介质错误: 0」），值是 0 不是错
       ⚠ 开头  —— 软性警告（「⚠ 其他错误: 6」「⚠ SMART 未知（跳过）」）
       状态:开头 —— generate_report 的结论行，明细另在别行
-      ✗ 或无标记（「smartctl 安装失败」「命令失败」）—— 真异常
+      ✗ 或无标记 —— 按上面的关键词再分「错误 / 报警」
     """
     m = (msg or "").strip()
     if m.startswith("✓") or m.startswith("状态:"):
         return ""
-    if m.startswith("⚠"):
+    # 严重：介质或数据面已经出问题
+    if _ERR_PAT.search(m):
+        return "err"
+    # 一般：性能、趋势、监控覆盖不到 —— 报警即可
+    if m.startswith("⚠") or _WARN_PAT.search(m):
         return "warn"
     return "err"
+
+
+# 严重（错误 / 红灯）
+_ERR_PAT = re.compile(
+    r"坏块|未纠正|UECC|介质错误:\s*[1-9]|预测失败:\s*[1-9]|"
+    r"超阈值|测速挂起|OSD\s*(?:down|掉线)|HEALTH_ERR",
+    re.I)
+# 一般（报警 / 黄灯）
+_WARN_PAT = re.compile(
+    r"速度极慢|卡顿|速度偏慢|slow\s*ops|HEALTH_WARN|增长缺陷|"
+    r"延迟|latency|smartctl\s*安装失败|SMART\s*未知",
+    re.I)
 
 
 BURST_SLACK = 900      # 秒。同一块盘一次轮询内几条记录的最大间隔，远小于两轮间隔
@@ -708,6 +787,9 @@ def poll_logs() -> dict:
                     break
         ent["issue"] = ent["issues"][0] if ent["issues"] else ""
         ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
+        # poll 在盘点结论后追加的附加信息：SSD 寿命 / 通电使用时间
+        ent["hours"] = parse_hours(ent.get("status"))
+        ent["life_text"] = parse_life(ent.get("status"))
 
         # 容量已知且过小 → 不是硬盘（虚拟块设备/残留），不进盘位图。
         # 容量认不出来的照常保留，宁可多显示也不误杀。
@@ -753,6 +835,86 @@ def poll_logs() -> dict:
     data = {"by_host": by_host, "runs": runs[:12]}
     _logs_cache["data"], _logs_cache["ts"] = data, now
     return data
+
+
+# ---------------- 单盘历史（警告及以上） ----------------
+
+_HIST_HOST_RE = re.compile(r'^[A-Za-z0-9._-]{1,64}$')
+_HIST_DEV_RE = re.compile(r'^/dev/[A-Za-z0-9._-]{1,32}$')
+_MSG_TS_RE = re.compile(r'\[异常\]\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
+_hist_cache = {}          # (server, dev, days) -> (ts, payload)
+_HIST_TTL = 60
+
+
+def _hist_text(msg: str) -> str:
+    """从一条 poll 异常行里抠出结论（保留开头的 状态:/✓/⚠/✗，供 _severity 判定）。
+
+        [异常] 2026-10-18 13:40:50  /dev/sdd[ … ]  m4-nod11(…)  osd.55 : ✗ 速度极慢! …
+        → ✗ 速度极慢! 硬盘当前处于卡顿状态
+    """
+    return (msg or "").rsplit(" : ", 1)[-1].strip()
+
+
+def history(server: str, dev: str, days: int = 30, limit: int = 20) -> dict:
+    """单盘「警告及以上」历史（近 days 天），按结论去重折叠。
+
+    数据源就是 VictoriaLogs 里的 osd-poll 日志 —— 不另建库。
+    同一结论多次出现折叠成一条：{text, level, count, first, last}。
+    """
+    server = (server or "").strip()
+    dev = (dev or "").strip()
+    if not _HIST_HOST_RE.match(server) or not _HIST_DEV_RE.match(dev):
+        return {"entries": [], "error": "参数不合法", "days": days}
+    try:
+        days = max(1, min(int(days or 30), 180))
+    except (TypeError, ValueError):
+        days = 30
+    try:
+        limit = max(1, min(int(limit or 20), 100))
+    except (TypeError, ValueError):
+        limit = 20
+
+    key = (server, dev, days)
+    now = time.time()
+    hit = _hist_cache.get(key)
+    if hit and now - hit[0] < _HIST_TTL:
+        return hit[1]
+
+    expr = f'app_name:osd-poll AND _msg:~"{server}" AND _msg:~"{dev}"'
+    logs = vl.query_logs(expr=expr, limit=2000,
+                         start=int(now - days * 86400), end=int(now))
+
+    groups = {}
+    for rec in logs:
+        msg = _ANSI_RE.sub("", rec.get("_msg") or "").strip()
+        if "[异常]" not in msg:
+            continue
+        raw = _hist_text(msg)                 # 结论（保留 状态:/✓/⚠/✗ 前缀）
+        sev = _severity(raw)                  # ← 用结论判定，不能用整行
+        if not sev:
+            continue
+        text = re.sub(r"^状态:\s*", "", raw).strip()   # 「状态: ✗ 异常」本身没信息量
+        if not text:
+            continue
+        m = _MSG_TS_RE.search(msg)
+        ts = m.group(1) if m else (rec.get("_time") or "")[:16].replace("T", " ")
+        g = groups.get(text)
+        if g is None:
+            groups[text] = {"text": text, "level": sev, "count": 1,
+                            "first": ts, "last": ts}
+        else:
+            g["count"] += 1
+            if ts < g["first"]:
+                g["first"] = ts
+            if ts > g["last"]:
+                g["last"] = ts
+            if sev == "err":
+                g["level"] = "err"          # 同一结论只要出现过错误级，就按错误算
+
+    entries = sorted(groups.values(), key=lambda x: x["last"], reverse=True)[:limit]
+    payload = {"entries": entries, "days": days, "host": server, "dev": dev}
+    _hist_cache[key] = (now, payload)
+    return payload
 
 
 # ---------------- 合并视图 ----------------
@@ -826,40 +988,51 @@ def _state_label(st: str, ent) -> str:
 
 
 def _disk_state(ent: dict, has_dev: bool) -> str:
-    """绿=确认健康 / 红=异常 / 黄=未知。
+    """绿=确认健康 / 黄=报警 / 红=错误。
 
     判据以**最近一次轮询**为准（poll_logs 已按盘归拢到最新一批）：
-      ✗ 或任何一条真异常 → 红
-      盘点正文里的 ⚠ → 黄
-      ✓ → 绿
+      有 err 级明细            → 红
+      只有 warning 级明细      → 黄（速度慢、slow ops、增长缺陷未超阈值…）
+      盘点结论 ✗ 但没有明细     → 红（不明原因的错误）
+      盘点正文里的 ⚠           → 黄
+      ✓                       → 绿
       有设备但日志没这条盘的记录 → 黄（未验证）
     """
     if not ent:
         return "warn" if has_dev else "none"
     s = (ent.get("status") or "").strip()
-    if ent.get("issue") or s.startswith("✗"):
-        return "err"                      # 有 ✗ 明细，或盘点结论就是 ✗
-    if ent.get("warns") or s.startswith("⚠") or "⚠" in s:
-        return "warn"                     # 只有软性警告 / SMART 未知
+    if ent.get("issue"):
+        return "err"                      # 有 err 级明细
+    if ent.get("warns"):
+        return "warn"                     # 只有 warning 级明细
+    if s.startswith("✗"):
+        return "err"                      # 结论 ✗ 却没有明细：宁可报红
+    if s.startswith("⚠") or "⚠" in s:
+        return "warn"
     if s.startswith("✓"):
         return "ok"
     return "warn" if has_dev else "none"
 
 
 def _status_text(ent) -> str:
-    """盘位显示的短状态：异常时给出主因，否则回显日志原文。"""
+    """盘位显示的短状态：异常时给出主因，否则回显日志原文。
+
+    「SSD寿命 / 使用时间」这类附加段单独成行显示（悬浮卡），不塞在状态里。
+    """
     e = ent or {}
     if e.get("issue"):
         return e["issue"]
     st = (e.get("status") or "").strip()
-    return st
+    return _strip_aux(st)
 
 
 SPAN_MAX = 8               # 单个设备最多占几个物理盘位（RAID5/6 也不会更多了）
 
 # 小于这个容量的设备不当硬盘看。实测 m4-nod12 的 /dev/rbd0 只有 4M ——
 # Ceph RBD 的虚拟块设备，不是物理盘，混进盘位图毫无意义。
-MIN_SIZE_TB = 0.064       # 64G
+# 阈值取 100G：全量盘表里真实物理盘最小 278.5G，4M~100G 之间没有任何设备，
+# 不会误杀（2026-10-18 用户要求「屏蔽小于 100G 的盘」）。
+MIN_SIZE_TB = 0.1         # 100G
 
 # 自动清理「已不在机器上」的盘（见 prune_missing）
 GONE_AFTER = 2 * 3600     # 相对该主机最新记录，超过这么久没上报 → 认为已拔掉
@@ -912,7 +1085,10 @@ def _log_fields(ent) -> dict:
     return {"media": e.get("media", ""), "role": e.get("role", ""),
             "carrier": car, "pslots": ps, "pshort": _pshort(ps),
             "raid": car.split("(")[0] if car else "",
-            "dclass": e.get("dclass", "")}
+            "dclass": e.get("dclass", ""),
+            "hours": e.get("hours"),
+            "hours_text": _fmt_hours(e.get("hours")),
+            "life_text": e.get("life_text", "")}
 
 
 def _recount(sv: dict) -> dict:
@@ -988,6 +1164,15 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
     # 没建过档的机器：先按默认盘位数摆一排空槽位，比空面板有信息量，
     # 也给了「日志发现的盘」一个可拖进去的目标。真实档案一旦存在就用档案。
     small = (log_h or {}).get("small") or {}      # 容量过小、不算硬盘的设备
+    # 档案里也可能留着过小的设备（如 m4-nod12 的 /dev/rbd0）。轮询侧一旦把它
+    # 剔掉，`prune_missing()` 就再也看不到它（它只遍历日志里还在的盘），
+    # 于是这条档案会永远挂在面板上。所以这里按**档案自己的容量**再挡一次。
+    small = dict(small)
+    for _row in (s.get("disks") or []):
+        _dev = (_row.get("dev") or "").strip()
+        _tb = size_tb(_row.get("size") or "")
+        if _dev and _tb is not None and _tb < MIN_SIZE_TB:
+            small.setdefault(_dev, _row.get("size", ""))
     layout = [x for x in (s.get("disks") or []) if (x.get("dev") or "") not in small]
     if not layout and not s.get("disks"):
         layout = [{"slot": i, "dev": "", "osd": "", "note": ""}

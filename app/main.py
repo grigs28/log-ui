@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, Request, Form, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from fastapi.responses import RedirectResponse, Response
+from fastapi import FastAPI, Request, Form, Body, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi.responses import RedirectResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -24,6 +24,7 @@ from . import disks
 from . import actions
 from . import notify
 from . import portal
+from . import users
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -75,7 +76,23 @@ RANGE_OPTIONS = [1, 3, 7, 30]
 
 
 def _require_user(request: Request):
-    return request.session.get("user")
+    """取当前用户，并按**最新**本地权限复核一次。
+
+    权限改成「用户(禁登)/封禁」要立刻生效，不能等下次登录 —— 所以每个请求
+    都过一遍 users.role_of()（mtime 缓存，开销是一次 stat）。
+    """
+    u = request.session.get("user")
+    if not u:
+        return None
+    allow, is_admin, role, _reason = users.role_of(
+        u.get("username", ""), u.get("yz_admin", u.get("is_admin")))
+    if not allow:
+        request.session.clear()          # 立即踢出
+        return None
+    if bool(u.get("is_admin")) != is_admin or u.get("local_role") != role:
+        u = dict(u, is_admin=is_admin, local_role=role)
+        request.session["user"] = u
+    return u
 
 
 def _theme(user) -> str:
@@ -109,6 +126,55 @@ def portal_status(request: Request):
     if not _require_user(request):
         return Response("Unauthorized", status_code=401)
     return portal.status()
+
+
+# ---------------- 用户与权限（管理员） ----------------
+# 路径刻意与网管中心网关一致（/portal/users），users_ui.js 原样搬过来即可用。
+@app.get("/portal/users")
+def portal_users(request: Request):
+    user = _require_user(request)
+    if not user:
+        return Response("Unauthorized", status_code=401)
+    if not user.get("is_admin"):
+        return Response("Forbidden", status_code=403)
+    return JSONResponse(users.snapshot())
+
+
+@app.post("/portal/users/save")
+def portal_users_save(request: Request, body: dict = Body(...),
+                      csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return Response("Unauthorized", status_code=401)
+    if not user.get("is_admin"):
+        return Response("Forbidden", status_code=403)
+    ok, msg = users.save_role(body.get("username", ""), body.get("role", ""))
+    return JSONResponse({"ok": ok, "msg": msg}, status_code=200 if ok else 400)
+
+
+@app.post("/portal/users/delete")
+def portal_users_delete(request: Request, body: dict = Body(...),
+                        csrf_ok: None = Depends(csrf_protect)):
+    user = _require_user(request)
+    if not user:
+        return Response("Unauthorized", status_code=401)
+    if not user.get("is_admin"):
+        return Response("Forbidden", status_code=403)
+    ok, msg = users.delete_user(body.get("username", ""))
+    return JSONResponse({"ok": ok, "msg": msg}, status_code=200 if ok else 400)
+
+
+@app.get("/auth/denied")
+def auth_denied(request: Request, reason: str = "", u: str = ""):
+    """被本地权限拒绝的落地页。
+
+    不能回跳 /auth/login —— yz-login 的会话还在，会立刻发新 ticket 回来，
+    形成「登录 → 拒绝 → 再登录」的死循环。这里只给「退出统一登录」的出口。
+    """
+    return templates.TemplateResponse(
+        request, "denied.html",
+        {"reason": reason or "未授权访问", "username": u, "theme": "dark", "user": None},
+    )
 
 
 @app.get("/favicon.ico")
@@ -384,6 +450,14 @@ def disks_page(request: Request):
     )
 
 
+@app.get("/disks/history")
+def disks_history(request: Request, server: str = "", dev: str = "", days: int = 30):
+    """单盘「警告及以上」历史，给盘格 hover 浮层用（数据直接查 VL，不另建库）。"""
+    if not _require_user(request):
+        return Response("Unauthorized", status_code=401)
+    return JSONResponse(disks.history(server, dev, days))
+
+
 @app.post("/disks/server/add")
 def disks_server_add(request: Request, name: str = Form(""), ip: str = Form(""),
                      per_row: int = Form(0),
@@ -539,7 +613,11 @@ def tail_page(request: Request):
 @app.websocket("/ws/tail")
 async def ws_tail(ws: WebSocket):
     await ws.accept()
-    if not ws.scope.get("session", {}).get("user"):
+    _su = ws.scope.get("session", {}).get("user") or {}
+    # 与 _require_user 同一套复核：被降权/封禁的会话不能继续读实时日志
+    _allow, _adm, _role, _why = users.role_of(
+        _su.get("username", ""), _su.get("yz_admin", _su.get("is_admin")))
+    if not _su or not _allow:
         await ws.close(code=4401)
         return
     last = int(time.time()) - 120

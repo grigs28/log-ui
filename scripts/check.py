@@ -100,9 +100,22 @@ FEATURE_MARKERS = {
         ("动作输出弹窗", "actmodal"),
         ("进度条", "actbar-fill"),
         ("物理盘位属性", "data-dev"),
+        ("单盘历史浮层", "bay-tip"),
+        ("历史接口", "/disks/history"),
+        ("使用时间", "d.hours_text"),
+        ("SSD寿命", "d.life_text"),
     ],
     "templates/base.html": [("脚本块", "{% block scripts %}")],
-    "templates/settings.html": [("钉钉通知", "/settings/notify")],
+    "templates/settings.html": [("钉钉通知", "/settings/notify"),
+                                ("用户与权限", "用户与权限"),
+                                ("登录记录", "loginlog")],
+    "templates/denied.html": [("拒绝原因", "deny-reason"),
+                              ("退出统一登录", "/auth/logout")],
+    "static/users_ui.js": [("权限下拉", "本地权限"),
+                           ("保存端点", "/portal/users/save"),
+                           ("删除按钮", "/portal/users/delete"),
+                           ("兜底管理员锁定", "u.locked"),
+                           ("输出转义", "esc(")],
     # CSS 也要点名：改模板里的类名时，CSS 里的选择器很容易没跟着改
     # （v1.6.3 把 bay-span 拆成 bay-hspan/bay-vspan，结果「撑满所占网格」那条
     #   规则还指着旧类名，镜像盘又变回 1 格宽）
@@ -110,6 +123,7 @@ FEATURE_MARKERS = {
         ("镜像盘撑满占位", ".baymap .bay-hspan"),
         ("横装内容横排", ".baymap.orient-h .bay"),
         ("竖排行高统一", "grid-auto-rows"),
+        ("悬浮卡等级灯", ".bay-tip-row .sev-err"),
     ],
 }
 
@@ -127,6 +141,57 @@ def template_markers() -> int:
     return bad
 
 
+def permission_matrix() -> int:
+    """本地权限矩阵：5 种组合 + 兜底管理员。纯函数，不碰真实 config/users.json。"""
+    sys.path.insert(0, str(BASE))
+    try:
+        from app import users
+    except ImportError as e:
+        print(f"  ⚠️  无法导入 app.users，跳过：{e}")
+        return 0
+    bad = 0
+    cases = [
+        # (本地角色, yz管理员, 期望放行, 期望本地管理员)
+        ("auto",    1, True,  True),
+        ("auto",    0, False, False),
+        ("admin",   0, True,  True),     # 本地可放宽
+        ("user",    1, False, False),    # 用户(禁登)
+        ("blocked", 1, False, False),
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        users.PATH = Path(td) / "users.json"
+        for role, yz, want_allow, want_admin in cases:
+            users.PATH.unlink(missing_ok=True)
+            users._cache.update({"mtime": None, "data": None})
+            if role != "auto":
+                users.save_role("t-user", role)
+            allow, is_admin, got_role, reason = users.role_of("t-user", yz)
+            ok = allow == want_allow and is_admin == want_admin and got_role == role
+            print(f"  {'✅' if ok else '❌'} 本地={role:<7} yz管理员={yz} → "
+                  f"放行={allow} 管理员={is_admin}（{reason}）")
+            bad += 0 if ok else 1
+
+        allow, is_admin, _, _ = users.role_of("grigs", 0)
+        ok = allow and is_admin
+        print(f"  {'✅' if ok else '❌'} grigs + yz普通 → 放行={allow} 管理员={is_admin}（兜底）")
+        bad += 0 if ok else 1
+
+        ok2, msg = users.save_role("grigs", "user")
+        print(f"  {'✅' if not ok2 else '❌'} 修改 grigs 权限被拒：{msg}")
+        bad += 0 if not ok2 else 1
+
+        users.save_role("t-gone", "user")
+        ok3, msg = users.delete_user("t-gone")
+        gone = not any(u["username"] == "t-gone" for u in users.list_users())
+        print(f"  {'✅' if ok3 and gone else '❌'} 删除普通用户记录：{msg or 'ok'}")
+        bad += 0 if ok3 and gone else 1
+
+        ok4, msg = users.delete_user("grigs")
+        print(f"  {'✅' if not ok4 else '❌'} 删除 grigs 被拒：{msg}")
+        bad += 0 if not ok4 else 1
+    return bad
+
+
 def smoke_routes() -> int:
     """打一遍 /disks 全部路由，确认没有 5xx。数据全在临时目录里。"""
     sys.path.insert(0, str(BASE))
@@ -138,7 +203,10 @@ def smoke_routes() -> int:
 
     with tempfile.TemporaryDirectory() as td:
         from app import disks
+        from app import users
         disks.PATH = Path(td) / "disks.yaml"          # ← 关键：绝不写真实档案
+        users.PATH = Path(td) / "users.json"          # ← 用户权限同样走临时文件
+        users._cache.update({"mtime": None, "data": None})
         fake = {"by_host": {"t-nod01": {
             "ip": "10.0.0.1",
             "disks": {f"/dev/sd{c}": {"osd": str(100 + i), "attr": "", "status": "✓ 健康"}
@@ -146,6 +214,7 @@ def smoke_routes() -> int:
             "poll_errors": []}}, "runs": []}
         disks.poll_logs = lambda: fake
         disks.fetch_hosts = lambda: [{"name": "t-nod02", "ip": "10.0.0.2"}]
+        disks.vl.query_logs = lambda **kw: []        # 历史查询走空结果，不连 VL
         disks.upsert_server("t-nod01", "10.0.0.1", 8)
         disks.archive_unfiled("t-nod01")
 
@@ -173,6 +242,8 @@ def smoke_routes() -> int:
             ("GET",  "/", None),
             ("GET",  "/servers", None),
             ("GET",  "/settings", None),
+            ("GET",  "/disks/history?server=t-nod01&dev=/dev/sdb&days=30", None),
+            ("GET",  "/disks/history?server=../x&dev=bogus", None),
         ]
         bad = 0
         for method, url, data in cases:
@@ -180,6 +251,28 @@ def smoke_routes() -> int:
                 r = c.request(method, url, data=data)
                 code = r.status_code
             except Exception as e:                       # 未捕获异常 = 线上 500
+                print(f"  ❌ {method} {url} → 异常 {type(e).__name__}: {e}")
+                bad += 1
+                continue
+            ok = code < 500
+            print(f"  {'✅' if ok else '❌'} {method} {url} → {code}")
+            if not ok:
+                bad += 1
+
+        # JSON 接口（用户与权限）单独打：data= 发的是表单，走不到 Body(dict)
+        json_cases = [
+            ("GET",  "/portal/users", None),
+            ("POST", "/portal/users/save", {"username": "t-user", "role": "user"}),
+            ("POST", "/portal/users/save", {"username": "grigs", "role": "user"}),
+            ("POST", "/portal/users/delete", {"username": "t-user"}),
+            ("POST", "/portal/users/delete", {"username": "grigs"}),
+            ("GET",  "/auth/denied?reason=%E6%B5%8B%E8%AF%95&u=t-user", None),
+        ]
+        for method, url, payload in json_cases:
+            try:
+                r = c.request(method, url, json=payload) if payload is not None else c.request(method, url)
+                code = r.status_code
+            except Exception as e:
                 print(f"  ❌ {method} {url} → 异常 {type(e).__name__}: {e}")
                 bad += 1
                 continue
@@ -199,6 +292,8 @@ def main() -> int:
     bad = static_checks()
     print("\n模板功能标记")
     bad += template_markers()
+    print("\n本地权限矩阵")
+    bad += permission_matrix()
     if not a.static:
         print("\n路由冒烟（数据写入临时目录，不碰 config/disks.yaml）")
         bad += smoke_routes()
