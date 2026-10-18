@@ -72,29 +72,31 @@ def _dedupe(rows, key=lambda r: (r.get("_time"), r.get("_msg"))):
 # ---------------- .98 rclone-backup ----------------
 
 def rclone_job() -> dict:
-    rows = _q('app_name:rclone-backup AND (_msg:~"BACKUP_" OR _msg:~"SYNC_ERROR")', 500)
+    rows = _q('app_name:rclone-backup AND (_msg:~"BACKUP_" OR _msg:~"SYNC_ERROR" OR '
+              '_msg:~"SNAPSHOT_ERROR")', 500)
     rows = _dedupe(rows)
     rows.sort(key=lambda r: r.get("_time") or "")
 
     done = [r for r in rows if (r.get("_msg") or "").startswith("BACKUP_COMPLETE")]
-    errs = [r for r in rows if (r.get("_msg") or "").startswith("BACKUP_ERROR")]
-    sync_err = [r for r in rows if (r.get("_msg") or "").startswith("SYNC_ERROR")]
+    errs = [r for r in rows
+            if (r.get("_msg") or "").startswith(
+                ("BACKUP_ERROR", "SYNC_ERROR", "SNAPSHOT_ERROR"))]
 
     job = {"key": "98", "title": "ls-bak08 · rclone → tank/79-nfs",
            "state": "none", "last": "", "summary": "", "note": "", "errors": []}
     last = (done + errs)
-    last.sort(key=lambda r: r.get("_time") or "")
+    # 同一秒内：错误排在完成之后 —— 快照失败时脚本会连发 SNAPSHOT_ERROR
+    # 和 BACKUP_COMPLETE，按错误算（宁可报红，不藏问题）
+    last.sort(key=lambda r: (r.get("_time") or "",
+                             0 if (r.get("_msg") or "").startswith("BACKUP_COMPLETE") else 1))
     if last:
         r = last[-1]
         msg = (r.get("_msg") or "").strip()
         job["last"] = _local(r.get("_time"), "rclone-backup")
         job["summary"] = msg
         job["state"] = "ok" if msg.startswith("BACKUP_COMPLETE") else "err"
-    job["note"] = f"近 30 天：{len(done)} 成功 / {len(errs)} 失败"
-    for r in errs[-5:]:
-        job["errors"].append({"ts": _local(r.get("_time"), "rclone-backup"),
-                              "text": (r.get("_msg") or "").strip()})
-    for r in sync_err[-3:]:
+    job["note"] = f"近 30 天：{len(done)} 成功 / {len(errs)} 条错误事件"
+    for r in errs[-6:]:
         job["errors"].append({"ts": _local(r.get("_time"), "rclone-backup"),
                               "text": (r.get("_msg") or "").strip()})
     return job
@@ -200,7 +202,8 @@ def inspect() -> dict:
 # 每个源：显示名 + 基础查询 + 条数上限
 _LOG_SOURCES = {
     "98": ("98 · ls-bak08", 'app_name:rclone-backup AND '
-                            '(level:error OR _msg:~"BACKUP_ERROR" OR _msg:~"SYNC_ERROR")', 600),
+                            '(level:error OR _msg:~"BACKUP_ERROR" OR _msg:~"SYNC_ERROR" OR '
+                            '_msg:~"SNAPSHOT_ERROR")', 600),
     "28": ("28 · Cobian", 'app_name:cobian-backup AND log_source:"192.168.0.28" AND '
                           '(_msg:~"无法" OR _msg:~"拒绝访问" OR '
                           '(_msg:~"错误数：" AND NOT _msg:~"错误数：0") OR '
@@ -214,7 +217,7 @@ _LOG_SOURCES = {
 
 _LOG_NOISE = re.compile(r'检查新版本|已删除，因为原始文件不存在', re.I)
 _LOG_ERR = re.compile(
-    r'BACKUP_ERROR|SYNC_ERROR|无法创建目录|无法复制文件|拒绝访问|I/O 设备错误|'
+    r'BACKUP_ERROR|SYNC_ERROR|SNAPSHOT_ERROR|无法创建目录|无法复制文件|拒绝访问|I/O 设备错误|'
     r'来源目录.*不存在|网络错误|失败项|发现\s*\d+\s*项失败|错误数[：:]\s*[1-9]', re.I)
 _LOG_WARN = re.compile(r'another_run_in_progress|速度极慢|卡顿', re.I)
 

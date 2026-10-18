@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [2.8.1] - 2026-10-18
+
+### Changed
+- **适配 `yz.backup-79-nfs.sh` v0.0.9 的新日志格式**（用户改了 .98 的日志发送）：
+  - rclone 原始输出不再进 syslog，只写本地 `/var/log/yz-detail/`；
+    发到 .14:516 的只剩结构化事件（一次运行约 10 条，之前每秒 150~300 条）
+  - 新增 `SNAPSHOT_ERROR` 事件（快照创建失败单独报错）
+  - `SYNC_ERROR` 增加 `errors=N first_error=…`（本次错误数 + 首个错误路径）
+  - `SYNC_DONE` 增加 `errors=N`（rclone 内部重试成功仍算成功，只留痕）
+- 备份页 `.98` 卡片把 `SNAPSHOT_ERROR` 计入错误；同一秒内**错误优先于完成**
+  （快照失败时脚本会连发 SNAPSHOT_ERROR + BACKUP_COMPLETE，按错误算）
+- `/backup/logs` 的 98 源查询加入 `SNAPSHOT_ERROR`
+
 ## [2.8.0] - 2026-10-18
 
 ### Added
