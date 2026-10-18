@@ -104,6 +104,7 @@ FEATURE_MARKERS = {
         ("历史接口", "/disks/history"),
         ("使用时间", "d.hours_text"),
         ("SSD寿命", "d.life_text"),
+        ("增长缺陷", "d.grown_text"),
     ],
     "templates/base.html": [("脚本块", "{% block scripts %}")],
     "templates/settings.html": [("钉钉通知", "/settings/notify"),

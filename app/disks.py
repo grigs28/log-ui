@@ -126,9 +126,11 @@ _HOURS_RE = re.compile(
     r"(?:使用时间|使用|通电时间|通电|运行时间|运行|Power[_ ]?On[_ ]?Hours)"
     r"[:：]?\s*(\d[\d,]*)\s*(?:h|H|小时)?", re.I)
 _LIFE_RE = re.compile(r"SSD\s*寿命\s*[:：]?\s*(\d{1,3}\s*%?(?:\s*/\s*\d{1,3}\s*%?)?)", re.I)
-# 状态行里属于「附加信息」的段：SSD寿命 / 使用时间 / 通电 …（鼠标卡片单独成行）
+# 增长缺陷（poll 只在任一成员 >0 时带出）：· 增长缺陷 5 / 0/163
+_GROWN_RE = re.compile(r"增长缺陷\s*[:：]?\s*(\d{1,6}(?:\s*/\s*\d{1,6})*)")
+# 状态行里属于「附加信息」的段：SSD寿命 / 使用时间 / 通电 / 增长缺陷（鼠标卡片单独成行）
 _AUX_PART = re.compile(
-    r"^(?:SSD\s*寿命|使用时间|使用|通电时间|通电|运行时间|运行)"
+    r"^(?:SSD\s*寿命|使用时间|使用|通电时间|通电|运行时间|运行|增长缺陷)"
     r"\s*[:：]?\s*\d", re.I)
 
 
@@ -158,6 +160,25 @@ def parse_life(text: str) -> str:
     if not m:
         return ""
     return re.sub(r"\s+", "", m.group(1))
+
+
+def parse_grown(text: str) -> str:
+    """从状态文本里取增长缺陷数（可能是 5 或 0/163），取不到返回 ''。"""
+    m = _GROWN_RE.search(text or "")
+    if not m:
+        return ""
+    return re.sub(r"\s+", "", m.group(1))
+
+
+def grown_max(text: str):
+    """增长缺陷里的最大值（多成员 VD 取最差的那块），取不到返回 None。"""
+    v = parse_grown(text)
+    if not v:
+        return None
+    try:
+        return max(int(x) for x in v.split("/"))
+    except ValueError:
+        return None
 
 
 def _fmt_hours(h) -> str:
@@ -787,9 +808,11 @@ def poll_logs() -> dict:
                     break
         ent["issue"] = ent["issues"][0] if ent["issues"] else ""
         ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
-        # poll 在盘点结论后追加的附加信息：SSD 寿命 / 通电使用时间
+        # poll 在盘点结论后追加的附加信息：SSD 寿命 / 增长缺陷 / 通电使用时间
         ent["hours"] = parse_hours(ent.get("status"))
         ent["life_text"] = parse_life(ent.get("status"))
+        ent["grown_text"] = parse_grown(ent.get("status"))
+        ent["grown_max"] = grown_max(ent.get("status"))
 
         # 容量已知且过小 → 不是硬盘（虚拟块设备/残留），不进盘位图。
         # 容量认不出来的照常保留，宁可多显示也不误杀。
@@ -1003,8 +1026,11 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
     s = (ent.get("status") or "").strip()
     if ent.get("issue"):
         return "err"                      # 有 err 级明细
-    if ent.get("warns"):
-        return "warn"                     # 只有 warning 级明细
+    g = ent.get("grown_max") or 0
+    if g > 100:
+        return "err"                      # 增长缺陷超阈值
+    if ent.get("warns") or g > 0:
+        return "warn"                     # 只有 warning 级明细 / 增长缺陷开始增长
     if s.startswith("✗"):
         return "err"                      # 结论 ✗ 却没有明细：宁可报红
     if s.startswith("⚠") or "⚠" in s:
@@ -1088,7 +1114,8 @@ def _log_fields(ent) -> dict:
             "dclass": e.get("dclass", ""),
             "hours": e.get("hours"),
             "hours_text": _fmt_hours(e.get("hours")),
-            "life_text": e.get("life_text", "")}
+            "life_text": e.get("life_text", ""),
+            "grown_text": e.get("grown_text", "")}
 
 
 def _recount(sv: dict) -> dict:
