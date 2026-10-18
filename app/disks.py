@@ -1146,6 +1146,46 @@ def _disk_state(ent: dict, has_dev: bool) -> str:
     return "warn" if has_dev else "none"
 
 
+# 每种问题的「可能后果」——悬停时跟在原因后面，帮判断要不要处理。
+# 匹配顺序从重到轻：先命中先返回。
+_ISSUE_HINTS = (
+    (re.compile(r"未纠正|UECC", re.I),
+     "读取可能失败，Ceph 需从副本重建，重建期间集群 IO 升高"),
+    (re.compile(r"坏块|重映射扇区", re.I),
+     "已出现坏道；继续扩展会丢数据，建议尽快更换"),
+    (re.compile(r"预测失败", re.I),
+     "SMART 预判即将故障，建议立即更换"),
+    (re.compile(r"测速挂起", re.I),
+     "盘/控制器 IO 不返回，OSD 可能假死"),
+    (re.compile(r"介质错误", re.I),
+     "读到坏扇区，数据完整性受影响"),
+    (re.compile(r"增长缺陷", re.I),
+     "介质开始出现坏区；继续增长会演变为读错误，需计划更换"),
+    (re.compile(r"速度极慢|卡顿|速度偏慢", re.I),
+     "OSD 延迟升高、写入变慢，可能拖累整池性能"),
+    (re.compile(r"slow\s*ops", re.I),
+     "请求在 OSD 上阻塞，客户端会感知卡顿"),
+    (re.compile(r"温度过高", re.I),
+     "盘会降速，严重时掉线"),
+    (re.compile(r"寿命", re.I),
+     "写寿命耗尽后进入只读或失效"),
+    (re.compile(r"smartctl|无法检测|SMART\s*未知", re.I),
+     "无法评估盘健康，故障不可见"),
+)
+
+
+def issue_hint(text: str) -> str:
+    for pat, hint in _ISSUE_HINTS:
+        if pat.search(text or ""):
+            return hint
+    return ""
+
+
+def _issue_rows(ent) -> list:
+    return [{"text": t, "hint": issue_hint(t)}
+            for t in ((ent or {}).get("issues") or [])]
+
+
 def _status_text(ent) -> str:
     """盘位显示的短状态：异常时给出主因，否则回显日志原文。
 
@@ -1327,6 +1367,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
             "issue": (ent or {}).get("issue", ""),
             "status": _status_text(ent),
             "issues": (ent or {}).get("issues", []),
+            "issue_rows": _issue_rows(ent),
             "known": bool(ent), "_poll_ts": (ent or {}).get("ts", 0),
             "state": st, "label": _state_label(st, ent),
             "span": _span_of(dev, log_disks, per_row),
@@ -1342,6 +1383,7 @@ def _assemble(s: dict, log_h: dict, auto: bool = False, default_slots: int = DEF
                       "attr": ent.get("attr", ""), "size": ent.get("size", ""),
                       "note": "", "issue": ent.get("issue", ""),
                       "status": _status_text(ent), "issues": ent.get("issues", []),
+                      "issue_rows": _issue_rows(ent),
                       "known": True, "unfiled": True, "_poll_ts": ent.get("ts", 0),
                       "state": st, "label": _state_label(st, ent),
                       "span": _span_of(dev, log_disks, per_row),
