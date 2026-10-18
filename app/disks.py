@@ -900,8 +900,6 @@ def poll_logs() -> dict:
                 if sz:
                     ent["size"] = sz
                     break
-        ent["issue"] = ent["issues"][0] if ent["issues"] else ""
-        ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
         # 未纠正读错误：绝对值只报警，比基线增长才升级为错误
         if ent.get("uncorrected") is not None:
             ent["uncorr_level"] = uncorr_level(host, dev, ent["uncorrected"])
@@ -910,6 +908,15 @@ def poll_logs() -> dict:
         ent["life_text"] = parse_life(ent.get("status"))
         ent["grown_text"] = parse_grown(ent.get("status"))
         ent["grown_max"] = grown_max(ent.get("status"))
+        # 增长缺陷 0<N≤100 时 poll 只写在状态行（没有 ✗ 异常行）—— 补一条警告，
+        # 否则黄灯在悬停里看不到原因（标签也会显示成「未知」）。
+        # >100 的情况 poll 会另发 ✗「超阈值」异常行，已经在 issues 里，不重复补。
+        gm = ent["grown_max"]
+        if gm and 0 < gm <= 100 and not any("增长缺陷" in x for x in ent["issues"] + ent["warns"]):
+            ent["warns"].append(f"增长缺陷 {ent['grown_text']}（阈值 100 内）")
+        # 最后合并展示列表（必须在补完警告之后，否则悬停里看不到）
+        ent["issue"] = ent["issues"][0] if ent["issues"] else ""
+        ent["issues"] = ent["issues"] + ent["warns"]     # 展示用：异常在前，警告在后
 
         # 容量已知且过小 → 不是硬盘（虚拟块设备/残留），不进盘位图。
         # 容量认不出来的照常保留，宁可多显示也不误杀。
