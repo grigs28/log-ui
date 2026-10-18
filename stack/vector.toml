@@ -72,7 +72,9 @@ type = "remap"
 inputs = ["rclone_syslog"]
 source = """
   ts = .timestamp
-  unix_ts = to_unix_timestamp!(ts, unit: "seconds") - 28800.0
+  # .98 的 rsyslog 用 RSYSLOG_SyslogProtocol23Format 转发，时间戳自带 +08:00，
+  # Vector 解析时已正确换算成 UTC —— 这里**不能再减 8 小时**，否则双重校正（2026-10-18 修正）。
+  unix_ts = to_unix_timestamp!(ts, unit: "seconds")
   . = {
     "_msg": .message,
     "_time": unix_ts * 1000.0,

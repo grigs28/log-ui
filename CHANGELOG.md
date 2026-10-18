@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [2.7.0] - 2026-10-18
+
+### Added
+- **备份 tab** —— 汇总三台备份节点的状态，数据全部来自 VictoriaLogs（不另建库）：
+
+  | 节点 | 数据源 | 判定 |
+  |---|---|---|
+  | .98 ls-bak08 | `app_name:rclone-backup` | `BACKUP_COMPLETE exit_code=0` / `BACKUP_ERROR` |
+  | .28 | Cobian 任务汇总 | `任务“…”备份已完成。错误数：N` |
+  | .79 | Cobian 错误明细 | 无汇总行，最近 24h 有错误才报警 |
+  | 每日巡检 | `app_name:bak-status` | 全绿 x/y 或失败项 |
+
+  - 顶部：每日巡检结论（.112/.113/.114/.116/.118/.29/.30/.98/.19）
+  - 三张任务卡：最近时间、任务汇总、近 30 天错误数
+  - 底部：近 30 天错误明细（按时间倒序）
+  - 60 秒缓存；冷启动约 0.8s
+  - 处理了 rclone-backup 历史记录的双重时区偏移（见 vector.toml 时区修正）
+
 ## [2.6.0] - 2026-10-18
 
 ### Changed

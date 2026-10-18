@@ -25,6 +25,7 @@ from . import actions
 from . import notify
 from . import portal
 from . import users
+from . import backup
 from .prefs import load_prefs, save_prefs
 
 BASE = Path(__file__).resolve().parent.parent
@@ -456,6 +457,18 @@ def disks_history(request: Request, server: str = "", dev: str = "", days: int =
     if not _require_user(request):
         return Response("Unauthorized", status_code=401)
     return JSONResponse(disks.history(server, dev, days))
+
+
+@app.get("/backup")
+def backup_page(request: Request):
+    """备份状态：.98 rclone / .28/.79 Cobian + 每日巡检。"""
+    user = _require_user(request)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=302)
+    return templates.TemplateResponse(
+        request, "backup.html",
+        {"user": user, "theme": _theme(user), **backup.status()},
+    )
 
 
 @app.post("/disks/server/add")

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}备份 · log-ui{% endblock %}
+
+{% block content %}
+<div class="bak-page">
+
+  <div class="bak-head">
+    <h2>备份</h2>
+    <span class="meta">数据更新 {{ updated }} · 来源 VictoriaLogs（近 30 天）</span>
+  </div>
+
+  {# 每日巡检：.112/.113/.114/.116/.118/.29/.30/.98/.19 #}
+  <div class="card bak-inspect">
+    <span class="dot {% if inspect.ok %}ok{% elif inspect.ok is none %}{% else %}err{% endif %}"></span>
+    <div class="bak-inspect-main">
+      <div class="bak-inspect-title">每日巡检</div>
+      <div class="bak-inspect-text">{{ inspect.text }}</div>
+      {% for f in inspect.failures %}
+      <div class="bak-fail mono">{{ f }}</div>
+      {% endfor %}
+    </div>
+    <span class="meta mono">{{ inspect.last or '—' }}</span>
+  </div>
+
+  <div class="bak-grid">
+    {% for j in jobs %}
+    <div class="card bak-job">
+      <div class="bak-job-head">
+        <span class="dot {{ j.state if j.state in ('ok','warn','err') else '' }}"></span>
+        <span class="bak-job-title">{{ j.title }}</span>
+        <span class="sbadge sbadge-{{ j.state }}">
+          <span class="dot {{ j.state if j.state in ('ok','warn','err') else '' }}"></span>
+          <span class="sblabel">{{ {'ok':'正常','warn':'警告','err':'失败','none':'无数据'}.get(j.state, j.state) }}</span>
+        </span>
+      </div>
+      <div class="bak-job-last mono">{{ j.last or '无记录' }}</div>
+      {% if j.summary %}<div class="bak-job-sum mono">{{ j.summary }}</div>{% endif %}
+      <div class="meta">{{ j.note }}</div>
+      {% if j.errors %}
+      <details class="bak-errors">
+        <summary>最近错误 {{ j.errors|length }} 条</summary>
+        {% for e in j.errors %}
+        <div class="bak-err">
+          <span class="bak-err-ts mono">{{ e.ts }}</span>
+          <span class="bak-err-text">{{ e.text }}</span>
+        </div>
+        {% endfor %}
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h3>近 30 天错误</h3>
+    {% if events %}
+    <div class="bak-events">
+      {% for e in events %}
+      <div class="bak-event bak-event-{{ e.level }}">
+        <span class="bak-ev-ts mono">{{ e.ts }}</span>
+        <span class="bak-ev-src">{{ e.source }}</span>
+        <span class="bak-ev-text">{{ e.text }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="meta">近 30 天没有备份错误记录。</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

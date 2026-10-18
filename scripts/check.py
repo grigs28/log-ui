@@ -112,6 +112,9 @@ FEATURE_MARKERS = {
                                 ("登录记录", "loginlog")],
     "templates/denied.html": [("拒绝原因", "deny-reason"),
                               ("退出统一登录", "/auth/logout")],
+    "templates/backup.html": [("每日巡检", "每日巡检"),
+                              ("任务卡", "bak-job"),
+                              ("错误明细", "bak-events")],
     "static/users_ui.js": [("权限下拉", "本地权限"),
                            ("保存端点", "/portal/users/save"),
                            ("删除按钮", "/portal/users/delete"),
@@ -125,6 +128,7 @@ FEATURE_MARKERS = {
         ("横装内容横排", ".baymap.orient-h .bay"),
         ("竖排行高统一", "grid-auto-rows"),
         ("悬浮卡等级灯", ".bay-tip-row .sev-err"),
+        ("备份网格", ".bak-grid"),
     ],
 }
 
@@ -215,7 +219,7 @@ def smoke_routes() -> int:
             "poll_errors": []}}, "runs": []}
         disks.poll_logs = lambda: fake
         disks.fetch_hosts = lambda: [{"name": "t-nod02", "ip": "10.0.0.2"}]
-        disks.vl.query_logs = lambda **kw: []        # 历史查询走空结果，不连 VL
+        disks.vl.query_logs = lambda *a, **k: []      # 历史/备份查询走空结果，不连 VL
         disks.upsert_server("t-nod01", "10.0.0.1", 8)
         disks.archive_unfiled("t-nod01")
 
@@ -243,6 +247,7 @@ def smoke_routes() -> int:
             ("GET",  "/", None),
             ("GET",  "/servers", None),
             ("GET",  "/settings", None),
+            ("GET",  "/backup", None),
             ("GET",  "/disks/history?server=t-nod01&dev=/dev/sdb&days=30", None),
             ("GET",  "/disks/history?server=../x&dev=bogus", None),
         ]

@@ -548,6 +548,37 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .bay-tip-row .when{ color:var(--ink-2); white-space:nowrap;
   font-family:var(--mono); font-size:11.5px; }
 
+/* ── 备份页 ─────────────────────────────────────────── */
+.bak-page{ display:flex; flex-direction:column; gap:12px; }
+.bak-head{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.bak-head h2{ margin:0; font-size:20px; font-weight:600; letter-spacing:.01em; }
+.bak-inspect{ display:flex; align-items:center; gap:12px; }
+.bak-inspect-main{ flex:1; min-width:0; }
+.bak-inspect-title{ font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-3); }
+.bak-inspect-text{ font-size:14px; color:var(--ink); margin-top:3px; }
+.bak-fail{ color:var(--led-err); font-size:12px; margin-top:4px; }
+.bak-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; }
+.bak-job{ display:flex; flex-direction:column; gap:6px; }
+.bak-job-head{ display:flex; align-items:center; gap:8px; }
+.bak-job-title{ flex:1; min-width:0; font-size:14px; color:var(--ink); font-weight:600; }
+.bak-job-last{ font-size:19px; color:var(--ink); letter-spacing:.01em; }
+.bak-job-sum{ font-size:12px; color:var(--ink-2); word-break:break-all; }
+.bak-errors{ margin-top:4px; border-top:1px solid var(--rule-2); padding-top:6px; }
+.bak-errors summary{ cursor:pointer; color:var(--ink-2); font-size:12px; }
+.bak-err{ display:flex; gap:8px; margin-top:5px; font-size:12px; line-height:1.6; }
+.bak-err-ts{ color:var(--ink-3); white-space:nowrap; }
+.bak-err-text{ color:var(--ink-2); word-break:break-word; }
+.bak-events{ display:flex; flex-direction:column; }
+.bak-event{ display:flex; gap:10px; padding:6px 0; border-top:1px solid var(--rule-2);
+  font-size:12.5px; align-items:flex-start; }
+.bak-event:first-child{ border-top:0; }
+.bak-ev-ts{ color:var(--ink-3); white-space:nowrap; }
+.bak-ev-src{ color:var(--ink-2); white-space:nowrap; min-width:52px; }
+.bak-ev-text{ color:var(--ink-2); word-break:break-word; }
+.bak-event-err .bak-ev-text{ color:var(--led-err); }
+.bak-event-warn .bak-ev-text{ color:var(--led-warn); }
+
 /* ── 打印 ───────────────────────────────────────────── */
 @media print{
   header, footer, .baytools, .bay-acts, .ordersave, button, .btn, .bay-tip{ display:none !important; }
