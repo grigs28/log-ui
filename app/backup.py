@@ -145,7 +145,8 @@ def cobian_jobs() -> list:
         job["note"] += f" · 近 30 天错误明细 {len(es)} 条"
         # 没有汇总行时，last 用「最新一条日志」而不是「最后一条错误」——
         # 否则 .79 会一直显示最后一次错误的时间（10-10），看起来像没在跑。
-        latest = _q(f'app_name:cobian-backup AND log_source:"{src}"', 1, 30)
+        latest = _q(f'app_name:cobian-backup AND log_source:"{src}" '
+                    f'AND NOT _msg:~"检查新版本"', 1, 30)
         act_epoch = 0
         if latest:
             act_epoch = _epoch(latest[0].get("_time"))

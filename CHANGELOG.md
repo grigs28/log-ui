@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [2.9.2] - 2026-10-19
+
+### Changed
+- **过滤 Cobian 的「检查新版本」日志**（`vector.toml` 的 `journald_filter`）：
+  .28/.79 的 Cobian 每次运行都联网查更新，内网连不上就记一条
+  `检查新版本是发生错误：Connect timed out` —— 纯噪声，与备份结果无关。
+  现在在 Vector 入库前直接丢弃，不再进 VictoriaLogs。
+  - 只丢 `_msg` 含「检查新版本」的 `app_name=cobian-backup` 记录，其它 Cobian 日志不受影响
+  - 历史记录仍在 VL 里（append-only 删不掉）；备份页/日志页本来就不显示它们
+- 备份页「最近活动」查询也排除这类行，避免 .79 这类无汇总源的最近时间被噪声占住。
+
 ## [2.9.1] - 2026-10-18
 
 ### Fixed

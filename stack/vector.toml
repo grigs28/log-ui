@@ -98,8 +98,10 @@ source = """
 [transforms.journald_filter]
 type = "filter"
 inputs = ["level_normalize"]
-# OpenEuler-Log-AI（journald）只保留 warning+，过滤 info/debug/notice 噪声
-condition = '.hostname != "OpenEuler-Log-AI" || (.level != "info" && .level != "debug" && .level != "notice")'
+# OpenEuler-Log-AI（journald）只保留 warning+，过滤 info/debug/notice 噪声。
+# 另外丢掉 Cobian 的「检查新版本」：它每次运行都联网查更新，内网连不上就记
+# 一条「发生错误：Connect timed out」——纯噪声，与备份结果无关（2026-10-19）。
+condition = '((.hostname != "OpenEuler-Log-AI") || (.level != "info" && .level != "debug" && .level != "notice")) && !(((to_string(.app_name) ?? "") == "cobian-backup") && contains((to_string(._msg) ?? ""), "检查新版本"))'
 
 [sinks.victorialogs]
 type = "http"
