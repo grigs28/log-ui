@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.0.2] - 2026-10-23
+
+### Changed
+- `.98` 卡片标题分隔符与其它卡片统一（`·` 两侧留空格）：
+  `.98.ls-bak08 · …` → `.98 · ls-bak08 · rclone → tank/79-nfs`
+
 ## [3.0.1] - 2026-10-23
 
 ### Changed

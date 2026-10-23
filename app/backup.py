@@ -79,7 +79,7 @@ def rclone_job() -> dict:
             if (r.get("_msg") or "").startswith(
                 ("BACKUP_ERROR", "SYNC_ERROR", "SNAPSHOT_ERROR"))]
 
-    job = {"key": "98", "title": ".98.ls-bak08 · rclone → tank/79-nfs",
+    job = {"key": "98", "title": ".98 · ls-bak08 · rclone → tank/79-nfs",
            "state": "none", "last": "", "summary": "", "note": "", "errors": []}
     last = (done + errs)
     # 同一秒内：错误排在完成之后 —— 快照失败时脚本会连发 SNAPSHOT_ERROR
