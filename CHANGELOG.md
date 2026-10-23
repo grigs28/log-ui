@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.1.0] - 2026-10-23
+
+### Added
+- **`.28` 卡片支持「运行中」**：`backup-79.ps1` 每个源开始跑时推一条
+  `RCLONE_START job=<名字> state=running`，log-ui 最后一条事件是 START 就显示
+  运行中（蓝色）+「已跑 X 分」，和 `.16` 一致。之前只在两个源都跑完后才推事件，
+  跑着的一整晚卡片都是「无数据」。
+  - 超过 12 小时还没等到 JOB 事件 → 转警告并提示「可能已中断」
+    （12 小时 = 计划任务的 ExecutionTimeLimit）
+
+### Changed
+- `.28` 的 rclone 日志级别 `INFO` → `NOTICE`（在 `backup-79.ps1` 里）：
+  逐文件的 `Copied (new)`/`Deleted` 行不再记录，一天日志从 ~200 MB 降到几十 KB。
+  ERROR（文件失败）和 WARNING/NOTICE（如 `Duplicate object found in source`）照常保留。
+  代价：汇总里不再区分「新增 / 覆盖」，日志里也看不到具体删了哪些文件（只剩计数）。
+
 ## [3.0.2] - 2026-10-23
 
 ### Changed

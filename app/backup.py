@@ -131,7 +131,7 @@ def _strip_prefix(msg: str) -> str:
 def rclone28_job() -> dict:
     """`.28` 的 rclone 任务。脚本每跑完一个源推一行 `RCLONE_JOB`，
     全部跑完再推一行 `RCLONE_TOTAL`（见 C:\\opt\\rclone\\backup-79.ps1）。"""
-    rows = _q('app_name:rclone28 AND (_msg:~"RCLONE_JOB" OR _msg:~"RCLONE_TOTAL")', 400)
+    rows = _q('app_name:rclone28 AND _msg:~"RCLONE_"', 400)
     rows = _dedupe(rows)
     rows.sort(key=lambda r: r.get("_time") or "")
 
@@ -141,7 +141,19 @@ def rclone28_job() -> dict:
     totals = [r for r in rows if (r.get("_msg") or "").startswith("RCLONE_TOTAL")]
     jobs = [r for r in rows if (r.get("_msg") or "").startswith("RCLONE_JOB")]
 
-    if totals:
+    # 最后一条事件是 START → 正在跑（脚本每个源开始时推一条）
+    running = bool(rows and (rows[-1].get("_msg") or "").startswith("RCLONE_START"))
+    if running:
+        st = rows[-1]
+        elapsed = time.time() - _epoch(st.get("_time"))
+        job["state"] = "run"
+        job["last"] = _local(st.get("_time"))
+        job["summary"] = (f"{st.get('job') or '?'} 正在同步 · "
+                          f"已跑 {_fmt_dur(elapsed)}")
+        if elapsed > 12 * 3600:
+            job["state"] = "warn"
+            job["summary"] += "（超过 12 小时，可能已中断）"
+    elif totals:
         r = totals[-1]
         failed = _num(r.get("failed"))
         job["last"] = _local(r.get("_time"))
