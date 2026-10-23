@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.0.1] - 2026-10-23
+
+### Changed
+- `.98` 卡片标题加主机前缀：`ls-bak08 · rclone → tank/79-nfs`
+  → `.98.ls-bak08 · rclone → tank/79-nfs`，与其它卡片的 `.28/.79/.16` 前缀一致。
+
 ## [3.0.0] - 2026-10-23
 
 备份页按现实情况重做：`.28` 的备份从 Cobian 换成 rclone、`.79` 归位为
