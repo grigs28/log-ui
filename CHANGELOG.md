@@ -2,6 +2,37 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.0.0] - 2026-10-23
+
+备份页按现实情况重做：`.28` 的备份从 Cobian 换成 rclone、`.79` 归位为
+Synology ABB、新增 `.16` 磁带备份。
+
+### Added
+- **`.16 taf · 磁带备份（LTFS）` 卡片**：读 `app_name:taf`
+  - 生命周期取钉钉通知器的 `🚀 备份任务开始` / `✅ 备份任务完成`，
+    有开始无完成 → **运行中**（蓝色，新增 `.dot.run` / `.sbadge-run`）
+  - 磁带写入取 `[Final监控] 开始移动文件到磁带`，从消息里的 `(大小: X GB)` 汇总总量
+  - 近 30 天：完成次数 / 写入包数 / 总 GB / 错误条数（排除 openGauss 噪声）
+  - TAF 每条日志入库两份（原始行 + 裸消息行），磁带事件只取裸消息形态，避免翻倍
+- **`.28` 改为 rclone 数据源**：`backup-79.ps1` 每个源跑完推一行 `RCLONE_JOB`、
+  全部跑完推一行 `RCLONE_TOTAL` 到 `http://192.168.0.14:9428/insert/jsonline`
+  （`app_name=rclone28`，字段：job/state/copied/copied_new/copied_replaced/deleted/
+  errors/elapsed_s/rate/rc/bytes_h）。上报失败只打一行日志，不影响备份结果；
+  测试模式用 `app_name=rclone28test`，不污染正式卡片。
+
+### Changed
+- **`.79` 备份类型改为 ABB**（Active Backup for Business），数据源改为
+  `app_name:ActiveBackup`（hostname `DS1821plus`）：
+  - `was completed` → 正常；`partially completed` / `was canceled` → 警告
+  - `Backup path … failed.(原因)` 按原因聚合计数（如 `Filename is too long ×48`），
+    卡片里只显示前 3 类 + 一条样例路径，避免几百条刷屏
+- 备份日志页来源下拉同步为：98 rclone / 28 rclone / 79 ABB / 16 磁带 / 巡检
+
+### Removed
+- **Cobian 相关的全部解析逻辑**（`cobian_jobs()`、`_COB_ERR`、`_COB_SUM_RE`）。
+  .28 的 Cobian 任务已停用，.79 的备份类型是 ABB，原来的
+  `任务“…”备份已完成。错误数：N` 判定不再适用。
+
 ## [2.9.2] - 2026-10-19
 
 ### Changed

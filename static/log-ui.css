@@ -159,6 +159,7 @@ tr:hover td{ background:var(--panel-2); }
 .dot.warn{          background:var(--led-warn); box-shadow:0 0 6px -1px var(--led-warn); }
 .dot.err,.dot.down{ background:var(--led-err);  box-shadow:0 0 6px -1px var(--led-err); }
 .dot.unk{           background:var(--led-off); }
+.dot.run{           background:var(--info);    box-shadow:0 0 6px -1px var(--info); }
 
 /* 采集器徽章：通 = 灯亮，断 = 灯红 */
 .cbadge{
@@ -452,6 +453,7 @@ hr{ border:0; border-top:1px solid var(--rule-2); margin:14px 0; }
 .sbadge-warn{ color:var(--led-warn);background:color-mix(in srgb,var(--led-warn) 12%,transparent); }
 .sbadge-err{  color:var(--led-err); background:color-mix(in srgb,var(--led-err) 14%,transparent); }
 .sbadge-none{ color:var(--ink-3);   background:transparent; }
+.sbadge-run{  color:var(--info);    background:color-mix(in srgb,var(--info) 12%,transparent); }
 
 /* ── 服务器卡片头部：两行 ───────────────────────────────
    第一行大字 = 服务器名 + 状态徽章（+ 右侧操作按钮）

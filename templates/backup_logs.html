@@ -22,7 +22,7 @@
     <label>来源
       <select name="source">
         <option value="">全部</option>
-        {% for k, v in [('98','98 · ls-bak08'), ('28','28 · Cobian'), ('79','79 · Cobian'), ('inspect','巡检')] %}
+        {% for k, v in [('98','98 · ls-bak08'), ('28','28 · rclone'), ('79','79 · ABB'), ('taf','16 · 磁带'), ('inspect','巡检')] %}
         <option value="{{ k }}" {{ 'selected' if k == source else '' }}>{{ v }}</option>
         {% endfor %}
       </select>

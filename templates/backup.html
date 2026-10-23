@@ -28,11 +28,11 @@
     {% for j in jobs %}
     <div class="card bak-job">
       <div class="bak-job-head">
-        <span class="dot {{ j.state if j.state in ('ok','warn','err') else '' }}"></span>
+        <span class="dot {{ j.state if j.state in ('ok','warn','err','run') else '' }}"></span>
         <span class="bak-job-title">{{ j.title }}</span>
         <span class="sbadge sbadge-{{ j.state }}">
-          <span class="dot {{ j.state if j.state in ('ok','warn','err') else '' }}"></span>
-          <span class="sblabel">{{ {'ok':'正常','warn':'警告','err':'失败','none':'无数据'}.get(j.state, j.state) }}</span>
+          <span class="dot {{ j.state if j.state in ('ok','warn','err','run') else '' }}"></span>
+          <span class="sblabel">{{ {'ok':'正常','warn':'警告','err':'失败','run':'运行中','none':'无数据'}.get(j.state, j.state) }}</span>
         </span>
       </div>
       <div class="bak-job-last mono">{{ j.last or '无记录' }}</div>
@@ -52,7 +52,7 @@
         {% endfor %}
       </details>
       {% endif %}
-      {% if j.key in ('98', '28', '79') %}
+      {% if j.key in ('98', '28', '79', 'taf') %}
       <div class="bak-job-foot"><a href="/backup/logs?source={{ j.key }}">全部日志 →</a></div>
       {% endif %}
     </div>
