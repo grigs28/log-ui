@@ -9,7 +9,9 @@
     ['portgrid', 'PortGrid',  8103],
     ['netdisco', 'NetDisco',  8104],
     ['semaphore','Semaphore', 8105],
-    ['logui',    'LOG-UI',    0, 'http://192.168.0.14/disks']
+    ['logui',    'LOG-UI',    0, 'http://192.168.0.14/disks'],
+    ['nas',      'NAS',       0, 'http://192.168.0.79:5000/'],
+    ['sx28',     '长文件名备案', 0, 'http://192.168.0.28/']
   ];
   var bar = document.getElementById('nm-topbar');
   if (!bar) return;

@@ -22,31 +22,37 @@ SERVICES = {
     "netdisco": 8104,
     "semaphore": 8105,
 }
+# 外部系统（完整 URL，不在网关端口上）：顶栏里同样有健康灯
+EXTERNAL = {
+    "nas": "http://192.168.0.79:5000/",
+    "sx28": "http://192.168.0.28/",
+}
 TIMEOUT = 1.2
 CACHE_TTL = 60          # 与顶栏的刷新周期一致
 
 _cache = {"ts": 0.0, "data": None}
 
 
-def _one(item):
-    key, port = item
+def _probe(key, url):
     try:
-        r = httpx.get(f"{GATEWAY}:{port}/", timeout=TIMEOUT, follow_redirects=False)
+        r = httpx.get(url, timeout=TIMEOUT, follow_redirects=False)
         return key, r.status_code < 500          # 302 = 服务在跑，算正常
     except Exception:
         return key, False
 
 
 def status() -> dict:
-    """{'netbox': True, 'librenms': False, ..., 'logui': True}。60 秒缓存。"""
+    """{'netbox': True, ..., 'logui': True, 'nas': ..., 'sx28': ...}。60 秒缓存。"""
     now = time.time()
     if _cache["data"] is not None and now - _cache["ts"] < CACHE_TTL:
         return _cache["data"]
 
     out = {"logui": True}        # 本机：能渲染这一页就说明它活着
-    # 并行探，避免某台挂了把整条请求拖到 6×超时
-    with cf.ThreadPoolExecutor(max_workers=len(SERVICES)) as ex:
-        for k, ok in ex.map(_one, SERVICES.items()):
+    jobs = [(k, f"{GATEWAY}:{p}/") for k, p in SERVICES.items()]
+    jobs += list(EXTERNAL.items())
+    # 并行探，避免某台挂了把整条请求拖成 N×超时
+    with cf.ThreadPoolExecutor(max_workers=len(jobs)) as ex:
+        for k, ok in ex.map(lambda j: _probe(*j), jobs):
             out[k] = ok
     _cache["data"], _cache["ts"] = out, now
     return out
