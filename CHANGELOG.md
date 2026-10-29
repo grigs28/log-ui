@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.2.1] - 2026-10-29
+
+### Changed
+- 顶栏里「长文件名备案」改成英文名 **LongName**（中文名在 13px 的顶栏里偏挤压，
+  与 NetBox / LOG-UI / NAS 等英文条目也不齐）。网关 `.6`、log-ui、sx28 三处同步。
+
 ## [3.2.0] - 2026-10-29
 
 ### Changed

@@ -11,7 +11,7 @@
     ['semaphore','Semaphore', 8105],
     ['logui',    'LOG-UI',    0, 'http://192.168.0.14/disks'],
     ['nas',      'NAS',       0, 'http://192.168.0.79:5000/'],
-    ['sx28',     '长文件名备案', 0, 'http://192.168.0.28/']
+    ['sx28',     'LongName', 0, 'http://192.168.0.28/']
   ];
   var bar = document.getElementById('nm-topbar');
   if (!bar) return;
