@@ -242,7 +242,11 @@ def merged():
             "cpu": _c(kv.get("cpu")),
             "cpu_max": _c(kv.get("cpu_max")),
             "cpu_crit": _c(kv.get("cpu_crit")),
-            "boots": kv.get("boots", ""),
+            # boots 的语义取决于 boots_src（脚本 v0.0.4 才有）：
+            #   last → 重启次数；poh → 通电小时数；没有 src 就不显示，免得把次数当小时
+            "boots_src": kv.get("boots_src", ""),
+            "boots": (kv.get("boots", "") if kv.get("boots_src") in ("last", "poh") else ""),
+            "psu_missing": "psu" not in kv,
             "fan": kv.get("fan_min", ""),
             "fan_n": kv.get("fan_n", ""),
             "psu": (kv.get("psu") or "").lower(),

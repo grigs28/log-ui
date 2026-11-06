@@ -94,7 +94,7 @@
       <td class="mono"><b>{{ h.name }}</b>{% if h.ip %}<div class="meta" style="font-size:11px">{{ h.ip }}</div>{% endif %}</td>
       <td><span class="tag {{ h.state if h.state in ('ok','warn','err') else '' }}">{{ h.label }}</span></td>
       <td class="mono">{{ h.inlet or '—' }}</td>
-      <td class="mono" title="{% if h.cpu_crit %}硬件 critical {{ h.cpu_crit }}&#10;{% endif %}{% if h.boots %}开机次数 {{ h.boots }}{% endif %}">{{ h.cpu or '—' }}{% if h.cpu_max %}<span class="meta"> / {{ h.cpu_max }}</span>{% endif %}</td>
+      <td class="mono" title="{% if h.cpu_crit %}硬件 critical {{ h.cpu_crit }}&#10;{% endif %}{% if h.boots %}{{ '重启' if h.boots_src == 'last' else '通电' }} {{ h.boots }}{{ ' 次' if h.boots_src == 'last' else ' 小时' }}{% endif %}">{{ h.cpu or '—' }}{% if h.cpu_max %}<span class="meta"> / {{ h.cpu_max }}</span>{% endif %}</td>
       <td class="mono">{{ h.fan or '—' }}{% if h.fan_n %}<span class="meta"> ×{{ h.fan_n }}</span>{% endif %}</td>
       <td class="mono {% if h.psu and h.psu != 'ok' %}spd-unk{% endif %}">{{ h.psu or '—' }}</td>
       <td class="mono {% if h.ecc_err %}spd-unk{% endif %}">{{ h.ecc or '—' }}</td>

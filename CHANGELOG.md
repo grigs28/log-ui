@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.4.1] - 2026-11-06
+
+### Fixed
+- `boots` 列按 `boots_src` 区分语义：`last`→「重启 N 次」、`poh`→「通电 N 小时」，
+  **缺 `boots_src` 就不显示**（实施侧 12.3 指出这个字段可能不是次数，先不猜）
+- `psu` / `intrusion` 按机型缺省：有就显示、没有显示 `—`（m3、ls-bak08 没有这些 SDR）
 ## [3.4.0] - 2026-11-06
 
 ### Added
