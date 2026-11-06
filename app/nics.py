@@ -60,6 +60,21 @@ def _epoch(s):
     return None
 
 
+def owner_class(owner):
+    """归属 → 配色类。bond 成员一律上色（bond0/bond1… 各一种），物理口用灰色虚线。
+
+    归属是「这块网卡属于哪个聚合组」，是结构信息不是健康状态，
+    所以只用蓝/紫/青/粉这几个冷色相，绿黄红留给状态。
+    """
+    o = (owner or "").strip()
+    m = re.match(r'bond(\d+)$', o, re.I)
+    if m:
+        return "own-b%d" % (int(m.group(1)) % 4)
+    if o in ("物理口", "聚合"):
+        return "own-phys"
+    return ""
+
+
 def _natural(name):
     """nic10 排在 nic9 后面，别按字典序。"""
     m = re.match(r'^(.*?)(\d+)$', name or "")
@@ -436,6 +451,7 @@ def merged():
             # 扩展区（脚本 v0.0.2 起才有；没有就是空 dict，模板按有无决定显示）
             "ext": dict(ev.get("ext") or {}),
         }
+        h["nics"][ev["dev"]]["owner_cls"] = owner_class(h["nics"][ev["dev"]]["owner"])
         _ext_display(h["nics"][ev["dev"]])
         h["updated"] = max(h["updated"], ev["ep"])
 

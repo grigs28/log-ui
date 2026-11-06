@@ -106,7 +106,7 @@
     {% for n in h.nics %}
     <tr>
       <td class="mono"><b>{{ n.name }}</b></td>
-      <td class="meta">{{ n.owner or '—' }}</td>
+      <td>{% if n.owner %}<span class="own {{ n.owner_cls }}">{{ n.owner }}</span>{% else %}<span class="meta">—</span>{% endif %}</td>
       <td><span class="spd {{ n.spd }}">{{ n.speed or '未知' }}</span></td>
       {% if stats.has_ext %}
       <td class="mono" title="PCI {{ n.pci_txt or '—' }}{% if n.fw_txt %} · {{ n.fw_txt }}{% endif %}"

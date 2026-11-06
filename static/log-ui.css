@@ -206,6 +206,16 @@ header .cbadge::before{ width:6px; height:6px; }
 .spd-low{   color:var(--ink-3); }
 .spd-unk{   color:var(--ink-3); border-style:dashed; opacity:.75; }
 
+/* 归属（bond 组 vs 物理口）：结构信息，用冷色相区分聚合组，灰虚线表示"不属于任何 bond"。
+   绿黄红是健康状态专用，这里不用。 */
+.own{ font-family:var(--mono); font-size:11.5px; padding:0 6px; border:1px solid var(--rule);
+      border-radius:var(--r); color:var(--ink-2); white-space:nowrap; }
+.own-phys{ color:var(--ink-3); border-style:dashed; }
+.own-b0{ color:var(--led-loc);   border-color:color-mix(in srgb,var(--led-loc) 50%,transparent); }
+.own-b1{ color:#a78bfa;          border-color:color-mix(in srgb,#a78bfa 50%,transparent); }
+.own-b2{ color:#4dd4c5;          border-color:color-mix(in srgb,#4dd4c5 50%,transparent); }
+.own-b3{ color:#f0a6ca;          border-color:color-mix(in srgb,#f0a6ca 50%,transparent); }
+
 /* ── 表单 ───────────────────────────────────────────── */
 form .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 label{
