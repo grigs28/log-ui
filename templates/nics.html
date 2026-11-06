@@ -28,7 +28,7 @@
   {% if stats.speed or stats.driver %}
   <div class="srvrow2">
     <span class="meta">速率</span>
-    {% for s, n in stats.speed %}<span class="srvstat">{{ s }} × {{ n }}</span>{% endfor %}
+    {% for s in stats.speed %}<span class="spd {{ s.spd }}">{{ s.label }} × {{ s.count }}</span>{% endfor %}
     <span class="meta">驱动</span>
     {% for d, n in stats.driver %}<span class="srvstat">{{ d }} × {{ n }}</span>{% endfor %}
   </div>
@@ -106,7 +106,7 @@
     <tr>
       <td class="mono"><b>{{ n.name }}</b></td>
       <td class="meta">{{ n.owner or '—' }}</td>
-      <td class="mono">{{ n.speed or '—' }}</td>
+      <td><span class="spd {{ n.spd }}">{{ n.speed or '未知' }}</span></td>
       <td class="meta">{{ n.driver or '—' }}</td>
       <td class="meta">{{ n.model or '—' }}</td>
       <td class="mono meta">{{ n.distance or '—' }}</td>

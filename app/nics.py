@@ -66,6 +66,23 @@ def _natural(name):
     return (m.group(1), int(m.group(2))) if m else (name or "", -1)
 
 
+def speed_class(speed):
+    """速率分档 → CSS 类名。10G 和 1G 一眼要能分开（颜色由 log-ui.css 的 .spd-* 定义）。"""
+    m = re.match(r'(\d+)', str(speed or ""))
+    if not m:
+        return "spd-unk"
+    mb = int(m.group(1))
+    if mb >= 100000:
+        return "spd-100g"
+    if mb >= 25000:
+        return "spd-25g"
+    if mb >= 10000:
+        return "spd-10g"
+    if mb >= 1000:
+        return "spd-1g"
+    return "spd-low"
+
+
 def parse_label(label):
     """`ixgbe·10G Ethernet: 10G Base-SR·0m·2020·bond0` → 分字段。
 
@@ -250,6 +267,7 @@ def merged():
             "driver": lab["driver"], "model": lab["model"],
             "distance": lab["distance"], "year": lab["year"],
             "speed": (sp.group("speed") if sp else ""),
+            "spd": speed_class(sp.group("speed") if sp else ""),
             "ok": bool(sp and sp.group("mark") == "✓"),
             "ep": ev["ep"], "ts": ev["ts"],
             "stale": not (w0 <= ev["ep"] <= w1),
@@ -348,7 +366,8 @@ def merged():
     driver = {}
     for n in all_nics:
         s = n["speed"] or "未知"
-        speed[s] = speed.get(s, 0) + 1
+        e = speed.setdefault(s, {"label": s, "count": 0, "spd": speed_class(n["speed"])})
+        e["count"] += 1
         d = n["driver"] or "未知"
         driver[d] = driver.get(d, 0) + 1
 
@@ -365,7 +384,7 @@ def merged():
         "last": _fmt_ts(last.get("ep")) if last else "",
         "last_elapsed": last.get("elapsed") if last else None,
         "last_text": (last.get("text") if last else ""),
-        "speed": sorted(speed.items(), key=lambda kv: -kv[1]),
+        "speed": sorted(speed.values(), key=lambda e: -e["count"]),
         "driver": sorted(driver.items(), key=lambda kv: -kv[1]),
     }
 

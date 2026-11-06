@@ -194,6 +194,18 @@ header .cbadge::before{ width:6px; height:6px; }
 .lv-debug{   color:var(--ink-3);    background:transparent; }
 .lv-notice{  color:var(--ink-2);    background:var(--panel-2); }
 
+/* 网卡速率分档（硬件 → 网卡视图）：10G 与 1G 必须一眼分开。
+   只用蓝/灰两级色相 —— 绿黄红是健康状态专用的，不能拿来表示速率。 */
+.spd{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11.5px;
+      padding:0 6px; border:1px solid var(--rule); border-radius:var(--r);
+      color:var(--ink-2); white-space:nowrap; }
+.spd-1g{    color:var(--ink-2); }
+.spd-10g{   color:var(--led-loc); border-color:color-mix(in srgb,var(--led-loc) 45%,transparent); }
+.spd-25g{   color:var(--led-loc); border-color:color-mix(in srgb,var(--led-loc) 65%,transparent); font-weight:600; }
+.spd-100g{  color:#a78bfa;        border-color:color-mix(in srgb,#a78bfa 55%,transparent); font-weight:600; }
+.spd-low{   color:var(--ink-3); }
+.spd-unk{   color:var(--ink-3); border-style:dashed; opacity:.75; }
+
 /* ── 表单 ───────────────────────────────────────────── */
 form .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 label{
