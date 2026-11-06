@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}网卡 · log-ui{% endblock %}
+{% block content %}
+
+{# 视图切换：磁盘盘位 / 网卡链路，同一个「硬件」入口 #}
+<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <h3 class="plain" style="margin:0">网卡链路巡检</h3>
+  <span class="meta">物理层：CRC / 帧错误 / carrier 按「本次 − 上次基线」判增量 · PCIe 降速 · SFP DDM · 链路与 bond</span>
+  <span style="flex:1"></span>
+  <a class="btn btn-muted" href="/disks">磁盘盘位</a>
+  <a class="btn" href="/disks?view=net">网卡链路</a>
+</div>
+
+<div class="card">
+  <div class="srvrow2" style="margin-top:0">
+    <span class="srvstat"><b>{{ stats.hosts }}</b> 台主机</span>
+    <span class="srvstat"><b>{{ stats.nics }}</b> 块网卡</span>
+    {% if stats.issues %}
+    <span class="srvstat" style="color:var(--led-warn)"><b>{{ stats.issues }}</b> 处异常（{{ stats.bad_hosts }} 台）</span>
+    {% else %}
+    <span class="srvstat" style="color:var(--led-ok)">本轮无异常</span>
+    {% endif %}
+    {% if stats.last %}
+    <span class="srvstat" title="{{ stats.last_text }}">最近轮询 {{ stats.last }}{% if stats.last_elapsed is not none %} · 用时 {{ stats.last_elapsed }}s{% endif %}</span>
+    {% endif %}
+    {% if stats.stale_hosts %}<span class="tag warn">{{ stats.stale_hosts }} 台本轮未上报</span>{% endif %}
+  </div>
+  {% if stats.speed or stats.driver %}
+  <div class="srvrow2">
+    <span class="meta">速率</span>
+    {% for s, n in stats.speed %}<span class="srvstat">{{ s }} × {{ n }}</span>{% endfor %}
+    <span class="meta">驱动</span>
+    {% for d, n in stats.driver %}<span class="srvstat">{{ d }} × {{ n }}</span>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if issues %}
+<div class="card" style="border-color:color-mix(in srgb,var(--led-warn) 35%,var(--rule))">
+  <h3>本轮异常 {{ issues|length }} 处</h3>
+  <table>
+    <tr><th>主机</th><th>网卡</th><th>归属</th><th>检查项</th><th>详情</th><th>首见</th><th>持续</th></tr>
+    {% for i in issues %}
+    <tr>
+      <td class="mono">{{ i.host }}</td>
+      <td class="mono">{{ i.nic or '—' }}</td>
+      <td class="meta">{{ i.owner or '—' }}</td>
+      <td><span class="lv lv-{{ 'error' if i.level == 'err' else 'warning' }}">{{ i.kind }}</span></td>
+      <td class="meta">{{ i.text }}</td>
+      <td class="mono meta">{{ i.since or '—' }}</td>
+      <td class="mono meta">{% if i.rounds > 1 %}{{ i.rounds }} 轮{% else %}本轮{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if runs %}
+<div class="card">
+  <details>
+    <summary><span class="meta">最近 {{ runs|length }} 轮巡检记录（点击展开）</span></summary>
+    <table style="margin-top:8px">
+      <tr><th>开始</th><th>结束</th><th>主机</th><th>网卡</th><th>异常</th><th>用时</th><th>说明</th></tr>
+      {% for r in runs %}
+      <tr>
+        <td class="mono">{{ r.ts or '—' }}</td>
+        <td class="mono meta">{{ r.end_ts or '—' }}</td>
+        <td class="mono meta">{{ r.hosts if r.hosts is not none else '—' }}</td>
+        <td class="mono meta">{{ r.nics if r.nics is not none else '—' }}</td>
+        <td class="mono">{% if r.issues %}<span style="color:var(--led-warn)">{{ r.issues }}</span>{% else %}0{% endif %}</td>
+        <td class="mono meta">{{ r.elapsed ~ 's' if r.elapsed is not none else '—' }}</td>
+        <td class="meta">{{ r.note }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </details>
+</div>
+{% endif %}
+
+{% for h in hosts %}
+<div class="card" id="nic-{{ h.name }}" style="margin-bottom:14px">
+  <div class="srvhead">
+    <div class="srvrow1">
+      <b class="srvname">{{ h.name }}</b>
+      <span class="sbadge sbadge-{{ h.state }}" title="{{ h.name }}（{{ h.ip or '无 IP' }}）&#10;{{ h.count }} 块网卡 · {{ h.bad }} 处问题&#10;最近更新 {{ h.updated or '—' }}">
+        <span class="dot {{ h.state if h.state in ('ok','warn','err') else '' }}"></span>{{ h.label }}</span>
+      <span style="flex:1"></span>
+      <span class="srvstat">{{ h.count }} 块网卡{% if h.bad %} · <b style="color:var(--led-warn)">{{ h.bad }} 处问题</b>{% endif %}</span>
+    </div>
+    <div class="srvrow2">
+      <span class="srvstat">{{ h.ip or '无 IP' }}</span>
+      {% if h.updated %}
+      <span class="srvstat{% if h.stale %} stale{% endif %}"
+            title="这台机器最近一次巡检上报的时间">更新 {{ h.updated }}{% if h.stale %}（本轮未上报）{% endif %}</span>
+      {% endif %}
+      {% if h.summary %}<span class="srvstat" title="该主机最近一条 [汇总] 行">{{ h.summary }}</span>{% endif %}
+    </div>
+  </div>
+  <table>
+    <tr>
+      <th style="width:74px">网卡</th><th style="width:84px">归属</th><th style="width:100px">速率</th>
+      <th style="width:92px">驱动</th><th>型号 / 光模块</th><th style="width:58px">线长</th>
+      <th style="width:58px">年份</th><th style="width:76px">状态</th><th>本轮问题</th>
+    </tr>
+    {% for n in h.nics %}
+    <tr>
+      <td class="mono"><b>{{ n.name }}</b></td>
+      <td class="meta">{{ n.owner or '—' }}</td>
+      <td class="mono">{{ n.speed or '—' }}</td>
+      <td class="meta">{{ n.driver or '—' }}</td>
+      <td class="meta">{{ n.model or '—' }}</td>
+      <td class="mono meta">{{ n.distance or '—' }}</td>
+      <td class="mono meta">{{ n.year or '—' }}</td>
+      <td><span class="tag {{ n.state if n.state in ('ok','warn','err') else '' }}" title="{{ n.ts }}">{{ n.label }}</span></td>
+      <td class="meta">
+        {% for i in n.issues %}
+        <div><span class="lv lv-{{ 'error' if i.level == 'err' else 'warning' }}">{{ i.kind }}</span> {{ i.text }}{% if i.since %} <span class="meta">（首见 {{ i.since }}{% if i.rounds > 1 %} · 已持续 {{ i.rounds }} 轮{% endif %}）</span>{% endif %}</div>
+        {% else %}—{% endfor %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="meta">本轮没有这块主机的盘点数据</td></tr>
+    {% endfor %}
+  </table>
+  {% if h.issues %}
+  <div class="srvrow2">
+    {% for i in h.issues %}
+    <span class="srvstat" style="color:var(--led-{{ 'err' if i.level == 'err' else 'warn' }})">✗ {{ i.text }}{% if i.since %}（首见 {{ i.since }}）{% endif %}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card"><span class="meta">还没有网卡巡检数据（VL 里查不到 app_name:net-poll 的日志）。</span></div>
+{% endfor %}
+
+{% endblock %}

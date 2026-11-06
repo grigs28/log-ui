@@ -9,6 +9,9 @@
     {% if stats.bad %}<span class="lv lv-error">{{ stats.bad }} 异常</span>{% endif %}
     {% if stats.unbuilt %}<span class="tag">{{ stats.unbuilt }} 未建档</span>{% endif %}
   </span>
+  {# 视图切换：磁盘盘位 / 网卡链路（同一个「硬件」入口） #}
+  <a class="btn" href="/disks">磁盘盘位</a>
+  <a class="btn btn-muted" href="/disks?view=net">网卡链路</a>
 </div>
 
 {% if runs %}

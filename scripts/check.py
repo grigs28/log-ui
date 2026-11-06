@@ -236,6 +236,7 @@ def smoke_routes() -> int:
 
         cases = [
             ("GET",  "/disks", None),
+            ("GET",  "/disks?view=net", None),
             ("GET",  "/disks?focus=t-nod01", None),
             ("POST", "/disks/view", {"server": s["name"], "mode": s["mode"],
                                      "orient": s["orient"], "per_row": str(s["h_per_row"]),

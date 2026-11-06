@@ -439,10 +439,18 @@ def _disks_back(back: str) -> str:
 
 
 @app.get("/disks")
-def disks_page(request: Request):
+def disks_page(request: Request, view: str = ""):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
+    if view == "net":
+        # 「硬件」下的第二个视图：网卡链路巡检（数据来自 net.poll，见 app/nics.py）
+        from . import nics
+        return templates.TemplateResponse(
+            request, "nics.html",
+            {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
+             **nics.merged()},
+        )
     data = disks.merged()
     return templates.TemplateResponse(
         request, "disks.html",
