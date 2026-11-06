@@ -233,11 +233,38 @@ def _ext_display(n):
     n["cnt_zero"] = bool(have) and not cnt
 
 
+_IPMAP_CACHE = {"ts": 0.0, "map": {}}
+
+
+def _host_ip_map():
+    """主机名 → IP：用 NAS 的 hosts 文件（和磁盘页同源），缓存 10 分钟。"""
+    now = time.time()
+    if _IPMAP_CACHE["map"] and now - _IPMAP_CACHE["ts"] < 600:
+        return _IPMAP_CACHE["map"]
+    try:
+        from .disks import fetch_hosts
+        m = {r["name"]: r["ip"] for r in fetch_hosts() if r.get("name") and r.get("ip")}
+    except Exception:
+        m = {}
+    if m:
+        _IPMAP_CACHE["map"], _IPMAP_CACHE["ts"] = m, now
+    return _IPMAP_CACHE["map"] or _IPMAP_CACHE["map"]
+
+
 def _fmt_ts(ep):
     return time.strftime("%m-%d %H:%M", time.localtime(ep)) if ep else ""
 
 
 _EXT_SPLIT = re.compile(r'\s\|\s(.*)$')
+# 尾部 `key=value` 序列（没有 `|` 分隔时兜底用）。只认已知 key，免得误伤正文里的 a=b。
+_TRAIL_KV = re.compile(r'(?:\s+[a-z][a-z0-9_]*=[^\s|]+)+$')
+_KNOWN_EXT_KEYS = {
+    "kind", "ip", "mtu", "duplex", "link", "oper", "pcie", "cap", "pci",
+    "drv_ver", "fw", "sfp_temp", "sfp_vcc", "sfp_txbias", "sfp_txpwr",
+    "sfp_rxpwr", "sfp_alarm",
+    "d_crc", "d_cksum", "d_frame", "d_rxerr", "d_txerr", "d_carrier",
+    "d_too_short", "d_missed", "d_nopbuf",
+}
 
 
 def _split_ext(rest):
@@ -247,15 +274,26 @@ def _split_ext(rest):
     这里**先截断再解析正文**，所以有没有扩展区都能用；扩展区里认不出的 key 直接忽略，
     将来脚本加字段不用改这个模块。
     """
-    m = _EXT_SPLIT.search(rest or "")
-    if not m:
-        return rest, {}
+    rest = rest or ""
+    m = _EXT_SPLIT.search(rest)
+    if m:
+        body, tail = rest[:m.start()], m.group(1)
+    else:
+        # 实施侧 v0.0.4 的 [异常] 行是 `… 实际 x4 kind=pcie`，没有 `|` 分隔。
+        # 只在这种无分隔形态下、且尾部每个 key 都已知时才认，否则原样当正文。
+        m2 = _TRAIL_KV.search(rest)
+        if not m2:
+            return rest, {}
+        toks = m2.group(0).split()
+        if not toks or any(t.split("=", 1)[0] not in _KNOWN_EXT_KEYS for t in toks):
+            return rest, {}
+        body, tail = rest[:m2.start()], " ".join(toks)
     ext = {}
-    for kv in m.group(1).split():
+    for kv in tail.split():
         k, _, v = kv.partition("=")
         if k and v:
             ext[k.strip()] = v.strip()
-    return rest[:m.start()], ext
+    return body, ext
 
 
 def _events():
@@ -357,7 +395,11 @@ def merged():
     # 最近一轮的时间窗：优先用 [开始]~[结束]，没有就用最新一行往前 15 分钟
     last = runs[-1] if runs else None
     if last:
-        w0 = (last.get("ep") or 0) - 30
+        # 窗口左界要晚于「上一轮结束」，否则上一轮的异常会被当成当前状态重复算一遍
+        w0 = (last.get("ep") or 0) - 60
+        if len(runs) >= 2:
+            prev_end = runs[-2].get("ep_end") or runs[-2].get("ep") or 0
+            w0 = max(w0, prev_end + 1)
         w1 = (last.get("ep_end") or last.get("ep") or 0) + 300
     else:
         newest = max((e["ep"] for e in evs), default=0)
@@ -372,6 +414,8 @@ def merged():
                                           "summary": "", "updated": 0, "issues": []})
         if ev.get("ip") and _IPV4_RE.match(ev["ip"]):
             h["ip"] = ev["ip"]
+        elif (ev.get("ext") or {}).get("ip"):
+            h["ip"] = ev["ext"]["ip"]
         lab = parse_label(ev.get("label"))
         sp = _SPEED_RE.match(ev.get("body") or "")
         nic = h["nics"].get(ev["dev"])
@@ -483,6 +527,13 @@ def merged():
 
     # 有问题的排前面，其余按名字
     out.sort(key=lambda x: (0 if x["bad"] else 1, 0 if x["stale"] else 1, x["name"]))
+
+    # 主机 IP：扩展区里给了 ip= 就用它；否则用 NAS 的 hosts 文件反查。
+    # （2026-11-06 实施侧去掉了行尾 [来源 host(ip)]，页面不能再从行里拿 IP）
+    ipmap = _host_ip_map()
+    for h in out:
+        if not h["ip"]:
+            h["ip"] = ipmap.get(h["name"], "")
 
     all_nics = [n for h in out for n in h["nics"]]
     speed = {}
