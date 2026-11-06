@@ -443,13 +443,15 @@ def disks_page(request: Request, view: str = "", vm: int = 0):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
+    from . import heartbeat
+    hb = heartbeat.status()
     if view == "hw":
         # 「硬件」下的第三个视图：整机巡检（IPMI/ECC/系统层，见 app/hw.py）
         from . import hw
         return templates.TemplateResponse(
             request, "hw.html",
             {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
-             **hw.merged()},
+             "hb": hb, **hw.merged()},
         )
     if view == "net":
         # 「硬件」下的第二个视图：网卡链路巡检（数据来自 net.poll，见 app/nics.py）
@@ -457,13 +459,13 @@ def disks_page(request: Request, view: str = "", vm: int = 0):
         return templates.TemplateResponse(
             request, "nics.html",
             {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
-             **nics.merged(show_vm=bool(vm))},
+             "hb": hb, **nics.merged(show_vm=bool(vm))},
         )
     data = disks.merged()
     return templates.TemplateResponse(
         request, "disks.html",
         {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
-         "edit_server": None, **data},
+         "edit_server": None, "hb": hb, **data},
     )
 
 

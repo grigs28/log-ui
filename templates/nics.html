@@ -2,6 +2,8 @@
 {% block title %}网卡 · log-ui{% endblock %}
 {% block content %}
 
+{% include "_heartbeat.html" %}
+
 {# 视图切换：磁盘盘位 / 网卡链路，同一个「硬件」入口 #}
 <div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <h3 class="plain" style="margin:0">网卡链路巡检</h3>

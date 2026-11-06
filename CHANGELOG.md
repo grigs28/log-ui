@@ -2,6 +2,18 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.3.8] - 2026-11-06
+
+### Added
+- **巡检健康度**：三个硬件视图顶部一条状态带，显示 `osd-poll` / `net-poll` / `hw-poll`
+  最近一次「[结束]」距今多久（新模块 `app/heartbeat.py`，直接查 VL，不依赖心跳脚本）。
+  判据：>14h 漏跑（黄）、>26h 中断（红）、30 天无数据标「未上线」（灰，不告警）。
+- 配套 cron 脚本 `scripts/poll_heartbeat.sh`（部署在 `.14`，每小时 7/17/27 分），
+  能区分「未启动」与「启动后中断」，事件写入 `app_name:poll-heartbeat`。
+
+### 说明
+- VictoriaLogs 本版本 `_time:now-26h` 不生效（返回空），`_time:26h` 与显式窗口都可用；
+  脚本统一用显式窗口。
 ## [3.3.7] - 2026-11-06
 
 ### Added

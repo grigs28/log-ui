@@ -1,0 +1,16 @@
+{# 巡检健康度：三个 poll 最近一次 [结束] 距今多久（数据直接查 VL，见 app/heartbeat.py） #}
+{% if hb and hb.jobs %}
+<div class="card" style="display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap;padding:8px 14px">
+  <span class="meta" title="osd / net / hw 三个巡检只在 .91 单点跑，这里看它们最近一次跑完是什么时候">巡检健康度</span>
+  {% for j in hb.jobs %}
+  <span style="display:inline-flex;align-items:center;gap:6px"
+        title="{{ j.title }}（{{ j.app }}）· 计划 {{ j.schedule }}&#10;最近结束：{{ j.last_full or '无记录' }}">
+    <span class="tag {{ j.state if j.state in ('ok','warn','err') else '' }}">{{ j.title }}</span>
+    <span class="srvstat{% if j.state == 'err' %} stale{% endif %}">
+      {{ j.label }}{% if j.age_h is not none %} · {{ j.age_h }}h 前{% endif %}
+    </span>
+  </span>
+  {% endfor %}
+  {% if hb.worst == 'err' %}<span class="lv lv-error">巡检已中断</span>{% endif %}
+</div>
+{% endif %}
