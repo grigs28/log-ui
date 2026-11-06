@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}整机 · log-ui{% endblock %}
+{% block content %}
+
+{# 视图切换：磁盘盘位 / 网卡链路 / 整机 #}
+<div class="card" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <h3 class="plain" style="margin:0">整机巡检</h3>
+  <span class="meta">IPMI（温度 / 风扇 / 电源 / 开盖）· 内存 ECC · 系统盘 SMART · 根分区 · NTP · 失败服务</span>
+  <span style="flex:1"></span>
+  <a class="btn btn-muted" href="/disks">磁盘盘位</a>
+  <a class="btn btn-muted" href="/disks?view=net">网卡链路</a>
+  <a class="btn" href="/disks?view=hw">整机</a>
+</div>
+
+{% if not stats.has_data %}
+<div class="card">
+  <h3>等待数据</h3>
+  <p class="meta" style="margin:6px 0 10px">
+    VictoriaLogs 里还没有 <code>app_name:hw-poll</code> 的日志。脚本（<code>hw.check.sh</code> / <code>hw.poll.sh</code>）
+    上线并跑过一轮后，这个页面会自动出数——不用改任何配置。
+  </p>
+  <p class="meta" style="margin:0 0 6px">页面认的是这几个 key（认 key 不认列，脚本加字段这里不用改）：</p>
+  <pre class="logpane" style="margin:0;padding:10px;font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:pre-wrap">[盘点] &lt;时间&gt;  &lt;主机&gt;  : ipmi=ok inlet=19C cpu=43C cpu_max=74C fan_min=4200RPM fan_n=8 \
+                         psu=ok ecc_ce=0 ecc_ue=0 disk=OK disk_life=97 root=5% failed=0 ntp=0.3ms boots=12
+[异常] &lt;时间&gt;  &lt;主机&gt;  : ✗ 风扇转速异常 FAN3 1200RPM | kind=fan item=FAN3
+[遥测] &lt;时间&gt;  &lt;主机&gt;  : inlet=19C cpu=43C fan_min=4200 ecc_ce=0 ecc_ue=0</pre>
+  <p class="meta" style="margin:10px 0 0">
+    约定见 <code>/mnt/79-sxiad/grigs/docs/hw-check-design.md</code> 第 7 / 10 节：
+    <code>|</code> 之后才是扩展区，<code>kind</code> 取值 <code>temp|fan|psu|ecc|disk|service|ntp|host</code>。
+  </p>
+</div>
+{% else %}
+
+<div class="card">
+  <div class="srvrow2" style="margin-top:0">
+    <span class="srvstat"><b>{{ stats.hosts }}</b> 台主机</span>
+    {% if stats.issues %}
+    <span class="srvstat" style="color:var(--led-warn)"><b>{{ stats.issues }}</b> 处异常（{{ stats.bad_hosts }} 台）</span>
+    {% else %}
+    <span class="srvstat" style="color:var(--led-ok)">本轮无异常</span>
+    {% endif %}
+    {% if stats.na_hosts %}<span class="srvstat" style="color:var(--ink-3)">{{ stats.na_hosts }} 台不适用（虚拟机 / 无 IPMI）</span>{% endif %}
+    {% if stats.last %}<span class="srvstat" title="{{ stats.last_text }}">最近轮询 {{ stats.last }}</span>{% endif %}
+    {% if stats.stale_hosts %}<span class="tag warn">{{ stats.stale_hosts }} 台本轮未上报</span>{% endif %}
+  </div>
+</div>
+
+{% if issues %}
+<div class="card" style="border-color:color-mix(in srgb,var(--led-warn) 35%,var(--rule))">
+  <h3>本轮异常 {{ issues|length }} 处</h3>
+  <table>
+    <tr><th>主机</th><th>检查项</th><th>对象</th><th>详情</th><th>时间</th></tr>
+    {% for i in issues %}
+    <tr>
+      <td class="mono">{{ i.host }}</td>
+      <td><span class="lv lv-{{ 'error' if i.level == 'err' else 'warning' }}">{{ i.kind }}</span></td>
+      <td class="mono meta">{{ i.item or '—' }}</td>
+      <td class="meta">{{ i.text }}</td>
+      <td class="mono meta">{{ i.ts[5:16] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if runs %}
+<div class="card">
+  <details>
+    <summary><span class="meta">最近 {{ runs|length }} 轮巡检记录（点击展开）</span></summary>
+    <table style="margin-top:8px">
+      <tr><th>开始</th><th>结束</th><th>说明</th></tr>
+      {% for r in runs %}
+      <tr><td class="mono">{{ r.ts or '—' }}</td><td class="mono meta">{{ r.end_ts or '—' }}</td><td class="meta">{{ r.text }}</td></tr>
+      {% endfor %}
+    </table>
+  </details>
+</div>
+{% endif %}
+
+<div class="card">
+  <table>
+    <tr>
+      <th style="width:130px">主机</th><th style="width:76px">状态</th>
+      <th style="width:74px">进风</th><th style="width:110px">CPU</th>
+      <th style="width:96px">风扇(最低)</th><th style="width:66px">电源</th>
+      <th style="width:92px">内存 ECC</th><th style="width:96px">系统盘</th>
+      <th style="width:66px">根分区</th><th style="width:80px">NTP</th>
+      <th style="width:60px">服务</th><th>更新</th>
+    </tr>
+    {% for h in hosts %}
+    <tr>
+      <td class="mono"><b>{{ h.name }}</b>{% if h.ip %}<div class="meta" style="font-size:11px">{{ h.ip }}</div>{% endif %}</td>
+      <td><span class="tag {{ h.state if h.state in ('ok','warn','err') else '' }}">{{ h.label }}</span></td>
+      <td class="mono">{{ h.inlet or '—' }}</td>
+      <td class="mono">{{ h.cpu or '—' }}{% if h.cpu_max %}<span class="meta"> / {{ h.cpu_max }}</span>{% endif %}</td>
+      <td class="mono">{{ h.fan or '—' }}{% if h.fan_n %}<span class="meta"> ×{{ h.fan_n }}</span>{% endif %}</td>
+      <td class="mono {% if h.psu and h.psu != 'ok' %}spd-unk{% endif %}">{{ h.psu or '—' }}</td>
+      <td class="mono {% if h.ecc_err %}spd-unk{% endif %}">{{ h.ecc or '—' }}</td>
+      <td class="mono">{{ h.disk or '—' }}{% if h.disk_life %}<span class="meta"> · {{ h.disk_life }}%</span>{% endif %}</td>
+      <td class="mono" style="{% if h.root_level %}color:var(--led-{{ 'err' if h.root_level == 'err' else 'warn' }}){% endif %}">{{ h.root or '—' }}</td>
+      <td class="mono" style="{% if h.ntp_level %}color:var(--led-{{ 'err' if h.ntp_level == 'err' else 'warn' }}){% endif %}">{{ h.ntp or '—' }}</td>
+      <td class="mono" style="{% if h.failed %}color:var(--led-warn){% endif %}">{{ h.failed }}</td>
+      <td class="meta">{{ h.updated or '—' }}{% if h.stale %} <span class="tag warn">未上报</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% endif %}
+{% endblock %}

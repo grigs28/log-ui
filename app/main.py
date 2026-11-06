@@ -443,6 +443,14 @@ def disks_page(request: Request, view: str = "", vm: int = 0):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
+    if view == "hw":
+        # 「硬件」下的第三个视图：整机巡检（IPMI/ECC/系统层，见 app/hw.py）
+        from . import hw
+        return templates.TemplateResponse(
+            request, "hw.html",
+            {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
+             **hw.merged()},
+        )
     if view == "net":
         # 「硬件」下的第二个视图：网卡链路巡检（数据来自 net.poll，见 app/nics.py）
         from . import nics

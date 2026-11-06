@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.3.7] - 2026-11-06
+
+### Added
+- 「硬件」新增**第三个视图「整机」**（`/disks?view=hw`，新模块 `app/hw.py`）：
+  IPMI 温度/风扇/电源、内存 ECC、系统盘 SMART、根分区、NTP、失败服务，一主机一行。
+  三个视图在同一入口互切（磁盘盘位 / 网卡链路 / 整机）。
+- **空架子先上线**：`app_name:hw-poll` 还没有数据，页面显示「等待数据」并列出约定格式；
+  `[盘点]` 一到自动出数，脚本加字段不用改这里（认 key 不认列）。
+- 显示层判据：根分区 85/90%、NTP 100ms/1s 着色；`ipmi=none`（虚拟机）标「不适用」不算异常；
+  `cc_ue>0`、`psu!=ok`、`failed>0` 高亮。
+- `scripts/check.py` 冒烟加 `/disks?view=hw`
+
+### 说明
+- 字段与判据见 `/mnt/79-sxiad/grigs/docs/hw-check-design.md` 第 7 节与第 10 节（需求侧答复）。
 ## [3.3.6] - 2026-11-06
 
 ### Changed
