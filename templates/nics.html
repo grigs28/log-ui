@@ -99,7 +99,7 @@
   <table>
     <tr>
       <th style="width:74px">网卡</th><th style="width:84px">归属</th><th style="width:100px">速率</th>
-      {% if stats.has_ext %}<th style="width:120px">链路</th><th style="width:120px">PCIe</th><th style="width:170px">SFP</th>{% endif %}
+      {% if stats.has_ext %}<th style="width:130px">链路</th><th style="width:120px">PCIe</th><th style="width:170px">SFP</th><th style="width:110px">计数</th>{% endif %}
       <th style="width:92px">驱动</th><th>型号 / 光模块</th><th style="width:58px">线长</th>
       <th style="width:58px">年份</th><th style="width:76px">状态</th><th>本轮问题</th>
     </tr>
@@ -109,9 +109,12 @@
       <td class="meta">{{ n.owner or '—' }}</td>
       <td><span class="spd {{ n.spd }}">{{ n.speed or '未知' }}</span></td>
       {% if stats.has_ext %}
-      <td class="mono meta" title="{{ n.pci_txt }}{% if n.fw_txt %} · {{ n.fw_txt }}{% endif %}">{{ n.link_txt or '—' }}</td>
+      <td class="mono" title="PCI {{ n.pci_txt or '—' }}{% if n.fw_txt %} · {{ n.fw_txt }}{% endif %}"
+          style="{% if n.link_state == 'err' %}color:var(--led-err){% elif n.link_state == 'mute' %}color:var(--ink-3){% endif %}">{{ n.link_txt or '—' }}</td>
       <td class="mono meta">{{ n.pcie_txt or '—' }}</td>
       <td class="meta">{{ n.sfp_txt or '—' }}</td>
+      <td class="mono meta{% if n.sfp_alarm %} spd-unk{% endif %}"
+          title="{% if not n.cnt_has %}首轮无基线{% elif n.cnt_zero %}本轮无新增错误{% endif %}">{{ n.cnt_txt if n.cnt_has else '—' }}{% if n.cnt_has and n.cnt_zero %} +0{% endif %}</td>
       {% endif %}
       <td class="meta">{{ n.driver or '—' }}</td>
       <td class="meta">{{ n.model or '—' }}</td>
@@ -125,7 +128,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="{{ 12 if stats.has_ext else 9 }}" class="meta">本轮没有这块主机的盘点数据</td></tr>
+    <tr><td colspan="{{ 13 if stats.has_ext else 9 }}" class="meta">本轮没有这块主机的盘点数据</td></tr>
     {% endfor %}
   </table>
   {% if h.issues %}

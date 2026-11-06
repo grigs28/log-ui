@@ -110,6 +110,22 @@ def parse_label(label):
     return out
 
 
+# 扩展区 kind 取值 → 页面显示名（A10：已知值直接用，未知值/缺失回落到文案关键字）
+KIND_NAMES = {
+    "pcie": "PCIe 链路",
+    "aer": "PCIe 错误",
+    "crc": "CRC",
+    "cksum": "校验和",
+    "frame": "帧错误",
+    "drop": "拥塞丢包",
+    "carrier": "链路抖动",
+    "sfp": "SFP",
+    "bond": "bond",
+    "link": "链路",
+    "host": "主机",
+}
+
+
 def _kind(text):
     t = text or ""
     if "PCIe" in t or "AER" in t:
@@ -138,18 +154,44 @@ def _level(text):
     return "warn"
 
 
-def _ext_display(n):
-    """把扩展字段拼成表格用的短文本；没有扩展区时全为空串。"""
-    e = n.get("ext") or {}
-    link = []
-    if e.get("mtu"):
-        link.append("MTU " + e["mtu"])
-    if e.get("duplex"):
-        link.append(e["duplex"])
-    if e.get("link") == "no":
-        link.append("链路 down")
-    n["link_txt"] = " · ".join(link)
+def _num(v, digits):
+    """扩展区的数值统一在这里定精度（脚本侧保留原值，展示精度归页面，见 A9）。"""
+    try:
+        return ("%." + str(digits) + "f") % float(v)
+    except (TypeError, ValueError):
+        return str(v)
 
+
+def _ext_display(n):
+    """把扩展字段拼成表格用的短文本；没有扩展区时全为空串。
+
+    三态规则（A11/A12/A15）：
+      链路  —— 断（红）/ 通·未转发（灰，bond backup 的正常态）/ 通
+      计数  —— d_x=0 → +0；d_x>0 → +N；整组缺失（首轮）→ 空，由模板显示 —
+    """
+    e = n.get("ext") or {}
+
+    # ---- 链路：MTU / 双工 + link/oper 三态 ----
+    parts = []
+    if e.get("mtu"):
+        parts.append("MTU " + e["mtu"])
+    if e.get("duplex"):
+        parts.append(e["duplex"])
+    link, oper = e.get("link"), e.get("oper")
+    if link == "no":
+        parts.append("断")
+        n["link_state"] = "err"
+    elif link and oper == "down":
+        parts.append("通 / 未转发")          # bond backup 成员：不告警，标灰
+        n["link_state"] = "mute"
+    elif link:
+        parts.append("通")
+        n["link_state"] = "ok"
+    else:
+        n["link_state"] = ""
+    n["link_txt"] = " · ".join(parts)
+
+    # ---- PCIe：当前值，和能力不同就并排给出 ----
     pcie = e.get("pcie") or ""
     cap = e.get("cap") or ""
     if pcie and cap and pcie != cap:
@@ -158,24 +200,37 @@ def _ext_display(n):
     n["pci_txt"] = e.get("pci") or ""
     n["fw_txt"] = " ".join(x for x in (e.get("drv_ver"), e.get("fw")) if x)
 
+    # ---- SFP：各自独立，缺哪项省哪项 ----
     sfp = []
-    for k, unit in (("temp", "C"), ("vcc", "V"), ("txbias", "mA"),
-                    ("txpwr", "dBm"), ("rxpwr", "dBm")):
+    for k, unit, dg in (("sfp_temp", "°C", 1), ("sfp_vcc", "V", 2),
+                        ("sfp_txbias", "mA", 1), ("sfp_txpwr", "dBm", 2),
+                        ("sfp_rxpwr", "dBm", 2)):
         if e.get(k):
-            v = e[k]
-            sfp.append(v if v.rstrip().endswith(unit) else v + unit)
-    if e.get("sfp_alarm") and e["sfp_alarm"] != "none":
-        sfp.append("报警: " + e["sfp_alarm"])
-    n["sfp_txt"] = " / ".join(sfp)
-    n["sfp_alarm"] = (e.get("sfp_alarm") or "") not in ("", "none")
+            sfp.append(_num(e[k], dg) + " " + unit)
+    alarm = (e.get("sfp_alarm") or "").strip()
+    if alarm and alarm != "none":
+        sfp.append("报警 " + alarm)
+    n["sfp_txt"] = " · ".join(sfp)
+    n["sfp_alarm"] = bool(alarm and alarm != "none")
 
+    # ---- 计数：只有增量；整组缺失 = 首轮无基线 ----
+    keys = (("d_crc", "CRC"), ("d_cksum", "校验和"), ("d_frame", "帧"),
+            ("d_rxerr", "rx_err"), ("d_txerr", "tx_err"), ("d_carrier", "carrier"))
+    have = [k for k, _ in keys if k in e]
     cnt = []
-    for k, label in (("d_crc", "CRC"), ("d_cksum", "校验和"), ("d_frame", "帧"),
-                     ("d_rxerr", "rx_err"), ("d_txerr", "tx_err"),
-                     ("d_carrier", "carrier")):
-        if e.get(k) and e[k] not in ("0",):
-            cnt.append("%s +%s" % (label, e[k]))
+    for k, label in keys:
+        v = e.get(k)
+        if v is None:
+            continue
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            continue
+        if iv:
+            cnt.append("%s +%d" % (label, iv))
     n["cnt_txt"] = " · ".join(cnt)
+    n["cnt_has"] = bool(have)
+    n["cnt_zero"] = bool(have) and not cnt
 
 
 def _fmt_ts(ep):
@@ -355,7 +410,8 @@ def merged():
         if ev["tag"] != "异常":
             continue
         text = ev.get("body") or ""
-        kind = _kind(text)
+        ek = ((ev.get("ext") or {}).get("kind") or "").strip().lower()
+        kind = KIND_NAMES.get(ek) or _kind(text)
         host = ev.get("host") or ""
         key = (host, ev.get("dev") or "", kind)
         h = hist.setdefault(key, {"first": ev["ep"], "first_ts": ev["ts"],
@@ -369,17 +425,19 @@ def merged():
         item = {"kind": kind, "text": text, "level": _level(text),
                 "since": "", "rounds": 0, "nic": ev.get("dev") or "", "owner": ev.get("owner") or "",
                 "host": host, "ts": ev["ts"], "ep": ev["ep"]}
+        # 主机可能只有异常、没有盘点行（本轮连不上 / 新机器），也要建条目，
+        # 否则异常会被静默丢掉——2026-11-06 自测时踩到
+        hn = hosts.setdefault(host, {"name": host, "ip": ev.get("ip") or "", "nics": {},
+                                     "summary": "", "updated": ev["ep"], "issues": []})
+        if ev.get("ip") and _IPV4_RE.match(ev["ip"]):
+            hn["ip"] = ev["ip"]
         if ev.get("dev"):
-            hn = hosts.get(host)
-            if hn:
-                n = hn["nics"].get(ev["dev"])
-                if n:
-                    n["issues"].append(item)
-                else:
-                    hn["issues"].append(item)      # 本轮没有盘点行的网卡
+            n = hn["nics"].get(ev["dev"])
+            if n:
+                n["issues"].append(item)
+            else:
+                hn["issues"].append(item)          # 本轮没有盘点行的网卡
         else:
-            hn = hosts.setdefault(host, {"name": host, "ip": ev.get("ip") or "", "nics": {},
-                                         "summary": "", "updated": ev["ep"], "issues": []})
             hn["issues"].append(item)
 
     for key, h in hist.items():
