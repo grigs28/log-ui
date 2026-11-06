@@ -9,6 +9,7 @@
 | 磁盘新异常 | 某块盘从「不异常」变成「异常」 | 记下报过的 host+设备；**恢复了就移出**，下次再坏会重新报 |
 | 采集器掉线 | vector/cobian/victorialogs 从「好」变成「坏」 | 记下上次状态，只在**状态翻转**时发 |
 | 每日汇总 | 每天到点发一条概览 | 记下发过的日期，一天只发一次 |
+| 巡检中断 | 某个 poll 超过 26h 没有 `[结束]`（或已有 `[结束]` 后又起了一轮没结束） | 记下每个 job 上次报过的状态，**只有状态翻转才发**；恢复也发一条 |
 
 **恢复也会报** —— 「好了」和「坏了」一样重要，不然你不知道要不要再去机房。
 
@@ -203,6 +204,68 @@ def _check_daily(st: dict) -> None:
         _save(st)
 
 
+# ---------------- 触发器 4：巡检心跳 ----------------
+
+_HEARTBEAT_TITLE = {"ok": "正常", "warn": "漏跑", "err": "中断", "none": "未上线"}
+
+
+def _check_heartbeat(st: dict) -> None:
+    """某个 poll 超过 26h 没有 [结束] → 发一条；恢复再发一条。
+
+    判定直接用 `heartbeat.status()`（和页面顶部那条状态带同源），
+    所以页面显示「中断」和钉钉收到「中断」永远是同一个判断。
+
+    **warn（>14h 漏跑一轮）不发**：那种情况页面标黄就够了，天天推手机是噪声。
+    **none（30 天没数据）不发**：那是还没上线的 job，不是故障。
+    """
+    if not _on("heartbeat_down"):
+        return
+    from . import heartbeat
+    try:
+        data = heartbeat.status()
+    except Exception:
+        return
+
+    seen = st.setdefault("heartbeat", {})
+    blocks, changed, news = [], [], {}
+    for j in data["jobs"]:
+        cur = j["state"]
+        if cur == "none":
+            continue
+        prev = seen.get(j["app"])
+        if prev == cur:
+            continue
+        if cur == "err":
+            blocks.append(
+                "### %s（%s）**中断**\n\n"
+                "- 最近一次跑完：%s\n"
+                "- 计划时间：%s\n"
+                "- 已经 **%s 小时** 没有结束记录\n"
+                "- 排查：`.91` 上的 cron、脚本能否下载、执行日志"
+                % (j["title"], j["app"], j["last_full"] or "无记录",
+                   j["schedule"], j["age_h"] if j["age_h"] is not None else "?"))
+            changed.append(j["app"])
+            news[j["app"]] = "err"
+        elif prev == "err":
+            blocks.append("### %s（%s）已恢复\n\n- 最近一次跑完：%s"
+                          % (j["title"], j["app"], j["last_full"] or "—"))
+            changed.append(j["app"])
+            news[j["app"]] = "ok"
+        else:
+            # ok/warn 之间切换不用发，但要记住状态，避免下次误判成"恢复"
+            seen[j["app"]] = cur
+
+    if not blocks:
+        return
+    bad = [a for a, v in news.items() if v == "err"]
+    title = "[巡检] %s" % ("中断" if bad else "已恢复")
+    if notify.send(title, "\n\n".join(blocks)).get("ok"):
+        for j in data["jobs"]:
+            if j["app"] in changed:
+                seen[j["app"]] = j["state"]
+        _save(st)
+
+
 # ---------------- 入口 ----------------
 
 def tick(badges: list = None) -> None:
@@ -216,6 +279,7 @@ def tick(badges: list = None) -> None:
             badges = collectors.status()
         _check_collectors(badges, st)
         _check_disks(st)
+        _check_heartbeat(st)
         _check_daily(st)
     finally:
         _save(st)

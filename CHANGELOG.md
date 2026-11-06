@@ -2,6 +2,18 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.3.9] - 2026-11-06
+
+### Added
+- **巡检中断走钉钉**：`alerts.py` 新增第 4 个触发器 `heartbeat_down` ——
+  某个 poll 超过 26h 没有 `[结束]` 时发一条钉钉，**恢复再发一条**。
+  边沿触发、状态记在 `notify_state.json`，不会每分钟刷屏；
+  `warn`（>14h 漏跑一轮）和 `none`（未上线）只上页面，不推手机。
+- 设置页「通知」新增「巡检中断」开关（`notify.events.heartbeat_down`，默认开）。
+
+### 说明
+- 判据与页面顶部「巡检健康度」同源（都调 `heartbeat.status()`），
+  页面显示中断和钉钉收到中断永远是同一个判断。
 ## [3.3.8] - 2026-11-06
 
 ### Added

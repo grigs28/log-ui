@@ -143,6 +143,8 @@
           <span>采集器掉线<em>vector / cobian / victorialogs 断连时发</em></span></label>
         <label class="ev"><input type="checkbox" name="ev_daily" value="1" {{ 'checked' if notify.events.daily_digest else '' }}>
           <span>每日汇总<em>到点发一条概览，无异常也发</em></span></label>
+        <label class="ev"><input type="checkbox" name="ev_hb" value="1" {{ 'checked' if notify.events.heartbeat_down else '' }}>
+          <span>巡检中断<em>磁盘 / 网卡 / 整机巡检超过 26 小时没跑完时发（恢复也发）</em></span></label>
         <span class="ev-time">每天 <input type="text" name="daily_at" value="{{ notify.daily_at }}" style="width:66px" placeholder="10:00"></span>
       </div>
 

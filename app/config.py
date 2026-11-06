@@ -74,6 +74,7 @@ def get_notify() -> dict:
             "disk_anomaly": bool(ev.get("disk_anomaly", True)),
             "collector_down": bool(ev.get("collector_down", True)),
             "daily_digest": bool(ev.get("daily_digest", True)),
+            "heartbeat_down": bool(ev.get("heartbeat_down", True)),
         },
     }
 
