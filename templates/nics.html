@@ -24,6 +24,12 @@
     <span class="srvstat" title="{{ stats.last_text }}">最近轮询 {{ stats.last }}{% if stats.last_elapsed is not none %} · 用时 {{ stats.last_elapsed }}s{% endif %}</span>
     {% endif %}
     {% if stats.stale_hosts %}<span class="tag warn">{{ stats.stale_hosts }} 台本轮未上报</span>{% endif %}
+    {% if stats.hidden_vm and not stats.show_vm %}
+    <a class="srvstat" href="/disks?view=net&vm=1" style="color:var(--ink-3);text-decoration:underline dotted"
+       title="全是虚拟网卡驱动（virtio/vmxnet3/e1000…）的主机，物理层巡检没有意义，默认不显示">已隐藏 {{ stats.hidden_vm }} 台虚拟机</a>
+    {% elif stats.show_vm and stats.hidden_vm %}
+    <a class="srvstat" href="/disks?view=net" style="color:var(--ink-3);text-decoration:underline dotted">包含 {{ stats.hidden_vm }} 台虚拟机 · 点击隐藏</a>
+    {% endif %}
   </div>
   {% if stats.speed or stats.driver %}
   <div class="srvrow2">

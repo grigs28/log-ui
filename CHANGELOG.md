@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [3.3.6] - 2026-11-06
+
+### Changed
+- 网卡视图**默认隐藏虚拟机**：主机的网卡全是虚拟驱动（virtio_net / vmxnet3 / e1000 /
+  e1000e / hv_netvsc / xen_netfront / ena）时视为 VM，物理层巡检没有意义
+  （例：`taf` / 192.168.93.16，2 块 virtio_net）。统计条显示「已隐藏 N 台虚拟机」，
+  点一下就 `?vm=1` 全显示。
+  手工覆盖用 `config/nics.yaml` 的 `hide:` / `show:`。
 ## [3.3.5] - 2026-11-06
 
 ### Changed

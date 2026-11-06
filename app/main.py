@@ -439,7 +439,7 @@ def _disks_back(back: str) -> str:
 
 
 @app.get("/disks")
-def disks_page(request: Request, view: str = ""):
+def disks_page(request: Request, view: str = "", vm: int = 0):
     user = _require_user(request)
     if not user:
         return RedirectResponse("/auth/login", status_code=302)
@@ -449,7 +449,7 @@ def disks_page(request: Request, view: str = ""):
         return templates.TemplateResponse(
             request, "nics.html",
             {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
-             **nics.merged()},
+             **nics.merged(show_vm=bool(vm))},
         )
     data = disks.merged()
     return templates.TemplateResponse(

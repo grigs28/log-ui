@@ -20,6 +20,7 @@
   · ignore 名单是每轮从 .79 下发到节点 /var/lib/net-check/ignore 的，
     历史上的异常行不会消失。所以「当前状态」只认最近一轮，历史只用来算「首见 / 持续几轮」。
 """
+import os
 import re
 import time
 
@@ -73,6 +74,40 @@ def owner_class(owner):
     if o in ("物理口", "聚合"):
         return "own-phys"
     return ""
+
+
+# 纯虚拟网卡驱动：主机如果全是这些，就当虚拟机，默认不显示
+# （taf / .16 是 VM，2 块 virtio_net —— 2026-11-06 用户要求去掉）
+VIRTUAL_DRIVERS = {
+    "virtio_net", "vmxnet3", "e1000", "e1000e", "hv_netvsc",
+    "xen_netfront", "ena", "veth", "dummy",
+}
+_CFG_PATH = None          # 允许测试覆盖
+_CFG_CACHE = {"ts": 0.0, "data": {"hide": [], "show": []}}
+
+
+def _load_cfg():
+    """config/nics.yaml：hide 额外隐藏的主机，show 强制显示（全是虚拟网卡也显示）。"""
+    global _CFG_PATH
+    now = time.time()
+    if now - _CFG_CACHE["ts"] < 30:
+        return _CFG_CACHE["data"]
+    path = _CFG_PATH or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "nics.yaml")
+    data = {"hide": [], "show": []}
+    try:
+        import yaml
+        with open(path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+        for k in ("hide", "show"):
+            v = raw.get(k) or []
+            if isinstance(v, str):
+                v = [v]
+            data[k] = [str(x).strip() for x in v if str(x).strip()]
+    except Exception:
+        pass
+    _CFG_CACHE["data"], _CFG_CACHE["ts"] = data, now
+    return data
 
 
 def _natural(name):
@@ -391,10 +426,12 @@ def _rounds(evs):
     return runs
 
 
-def merged():
-    """渲染用模型。结构见模板 nics.html。"""
+def merged(show_vm: bool = False):
+    """渲染用模型。结构见模板 nics.html。show_vm=True 时连虚拟机一起显示。"""
     now = time.time()
-    if _CACHE["data"] is not None and now - _CACHE["ts"] < _TTL:
+    key = bool(show_vm)
+    if (_CACHE["data"] is not None and _CACHE.get("key") == key
+            and now - _CACHE["ts"] < _TTL):
         return _CACHE["data"]
 
     evs = _events()
@@ -551,6 +588,19 @@ def merged():
         if not h["ip"]:
             h["ip"] = ipmap.get(h["name"], "")
 
+    # ---- 虚拟机过滤：全是虚拟网卡驱动的当 VM，默认隐藏（可 ?vm=1 显示）----
+    cfg = _load_cfg()
+    for h in out:
+        drv = {n["driver"] for n in h["nics"] if n["driver"]}
+        h["virtual"] = bool(drv) and drv <= VIRTUAL_DRIVERS
+        if h["name"] in cfg["show"]:
+            h["virtual"] = False
+        elif h["name"] in cfg["hide"]:
+            h["virtual"] = True
+    hidden = [h for h in out if h["virtual"]]
+    if not show_vm:
+        out = [h for h in out if not h["virtual"]]
+
     all_nics = [n for h in out for n in h["nics"]]
     speed = {}
     driver = {}
@@ -572,6 +622,8 @@ def merged():
         "issues": len(issues),
         "bad_hosts": sum(1 for h in out if h["bad"]),
         "stale_hosts": sum(1 for h in out if h["stale"]),
+        "hidden_vm": len(hidden),
+        "show_vm": bool(show_vm),
         "last": _fmt_ts(last.get("ep")) if last else "",
         "last_elapsed": last.get("elapsed") if last else None,
         "last_text": (last.get("text") if last else ""),
@@ -580,5 +632,5 @@ def merged():
     }
 
     data = {"stats": stats, "hosts": out, "issues": issues, "runs": list(reversed(runs))[:10]}
-    _CACHE["data"], _CACHE["ts"] = data, now
+    _CACHE["data"], _CACHE["ts"], _CACHE["key"] = data, now, key
     return data
