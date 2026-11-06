@@ -99,6 +99,7 @@
   <table>
     <tr>
       <th style="width:74px">网卡</th><th style="width:84px">归属</th><th style="width:100px">速率</th>
+      {% if stats.has_ext %}<th style="width:120px">链路</th><th style="width:120px">PCIe</th><th style="width:170px">SFP</th>{% endif %}
       <th style="width:92px">驱动</th><th>型号 / 光模块</th><th style="width:58px">线长</th>
       <th style="width:58px">年份</th><th style="width:76px">状态</th><th>本轮问题</th>
     </tr>
@@ -107,6 +108,11 @@
       <td class="mono"><b>{{ n.name }}</b></td>
       <td class="meta">{{ n.owner or '—' }}</td>
       <td><span class="spd {{ n.spd }}">{{ n.speed or '未知' }}</span></td>
+      {% if stats.has_ext %}
+      <td class="mono meta" title="{{ n.pci_txt }}{% if n.fw_txt %} · {{ n.fw_txt }}{% endif %}">{{ n.link_txt or '—' }}</td>
+      <td class="mono meta">{{ n.pcie_txt or '—' }}</td>
+      <td class="meta">{{ n.sfp_txt or '—' }}</td>
+      {% endif %}
       <td class="meta">{{ n.driver or '—' }}</td>
       <td class="meta">{{ n.model or '—' }}</td>
       <td class="mono meta">{{ n.distance or '—' }}</td>
@@ -119,7 +125,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="9" class="meta">本轮没有这块主机的盘点数据</td></tr>
+    <tr><td colspan="{{ 12 if stats.has_ext else 9 }}" class="meta">本轮没有这块主机的盘点数据</td></tr>
     {% endfor %}
   </table>
   {% if h.issues %}

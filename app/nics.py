@@ -138,8 +138,69 @@ def _level(text):
     return "warn"
 
 
+def _ext_display(n):
+    """把扩展字段拼成表格用的短文本；没有扩展区时全为空串。"""
+    e = n.get("ext") or {}
+    link = []
+    if e.get("mtu"):
+        link.append("MTU " + e["mtu"])
+    if e.get("duplex"):
+        link.append(e["duplex"])
+    if e.get("link") == "no":
+        link.append("链路 down")
+    n["link_txt"] = " · ".join(link)
+
+    pcie = e.get("pcie") or ""
+    cap = e.get("cap") or ""
+    if pcie and cap and pcie != cap:
+        pcie = "%s（能力 %s）" % (pcie, cap)
+    n["pcie_txt"] = pcie
+    n["pci_txt"] = e.get("pci") or ""
+    n["fw_txt"] = " ".join(x for x in (e.get("drv_ver"), e.get("fw")) if x)
+
+    sfp = []
+    for k, unit in (("temp", "C"), ("vcc", "V"), ("txbias", "mA"),
+                    ("txpwr", "dBm"), ("rxpwr", "dBm")):
+        if e.get(k):
+            v = e[k]
+            sfp.append(v if v.rstrip().endswith(unit) else v + unit)
+    if e.get("sfp_alarm") and e["sfp_alarm"] != "none":
+        sfp.append("报警: " + e["sfp_alarm"])
+    n["sfp_txt"] = " / ".join(sfp)
+    n["sfp_alarm"] = (e.get("sfp_alarm") or "") not in ("", "none")
+
+    cnt = []
+    for k, label in (("d_crc", "CRC"), ("d_cksum", "校验和"), ("d_frame", "帧"),
+                     ("d_rxerr", "rx_err"), ("d_txerr", "tx_err"),
+                     ("d_carrier", "carrier")):
+        if e.get(k) and e[k] not in ("0",):
+            cnt.append("%s +%s" % (label, e[k]))
+    n["cnt_txt"] = " · ".join(cnt)
+
+
 def _fmt_ts(ep):
     return time.strftime("%m-%d %H:%M", time.localtime(ep)) if ep else ""
+
+
+_EXT_SPLIT = re.compile(r'\s\|\s(.*)$')
+
+
+def _split_ext(rest):
+    """把 `… ✓ 正常 | mtu=9000 duplex=Full` 切成 (正文, {扩展字段})。
+
+    脚本 v0.0.2 起会在盘点/异常行尾追加 `| key=value …`（见 docs 里的建议文档）。
+    这里**先截断再解析正文**，所以有没有扩展区都能用；扩展区里认不出的 key 直接忽略，
+    将来脚本加字段不用改这个模块。
+    """
+    m = _EXT_SPLIT.search(rest or "")
+    if not m:
+        return rest, {}
+    ext = {}
+    for kv in m.group(1).split():
+        k, _, v = kv.partition("=")
+        if k and v:
+            ext[k.strip()] = v.strip()
+    return rest[:m.start()], ext
 
 
 def _events():
@@ -153,8 +214,9 @@ def _events():
             continue
         tag, ts, rest = m.group(1), (m.group(2) or ""), m.group(3).strip()
         rest = _SRC_RE.sub("", rest).strip()
+        rest, ext = _split_ext(rest)
         ep = _epoch(ts) or _epoch(rec.get("_time"))
-        ev = {"tag": tag, "ts": ts, "ep": ep or 0, "rest": rest, "raw": msg}
+        ev = {"tag": tag, "ts": ts, "ep": ep or 0, "rest": rest, "raw": msg, "ext": ext}
 
         if tag in ("盘点", "异常"):
             mm = _NIC_RE.match(rest)
@@ -272,7 +334,10 @@ def merged():
             "ep": ev["ep"], "ts": ev["ts"],
             "stale": not (w0 <= ev["ep"] <= w1),
             "issues": [],
+            # 扩展区（脚本 v0.0.2 起才有；没有就是空 dict，模板按有无决定显示）
+            "ext": dict(ev.get("ext") or {}),
         }
+        _ext_display(h["nics"][ev["dev"]])
         h["updated"] = max(h["updated"], ev["ep"])
 
     for ev in evs:
@@ -376,6 +441,7 @@ def merged():
     issues.sort(key=lambda i: (i["level"] != "err", -(i.get("ep") or 0)))
 
     stats = {
+        "has_ext": any(n.get("ext") for n in all_nics),
         "hosts": len(out),
         "nics": len(all_nics),
         "issues": len(issues),
