@@ -105,6 +105,8 @@ def _events():
         tag, ts, rest = m.group(1), (m.group(2) or ""), m.group(3).strip()
         rest = _SRC_RE.sub("", rest).strip()
         host, body, ip = _split_host(rest)
+        if tag in ("开始", "结束"):
+            host, body = "", rest      # 这两类行没有「主机 : 正文」结构
         ep = _epoch(ts) or _epoch(rec.get("_time"))
         ev = {"tag": tag, "ts": ts, "ep": ep, "host": host, "ip": ip,
               "body": body, "raw": msg, "ext": {}}
@@ -239,6 +241,8 @@ def merged():
             "inlet": _c(kv.get("inlet")),
             "cpu": _c(kv.get("cpu")),
             "cpu_max": _c(kv.get("cpu_max")),
+            "cpu_crit": _c(kv.get("cpu_crit")),
+            "boots": kv.get("boots", ""),
             "fan": kv.get("fan_min", ""),
             "fan_n": kv.get("fan_n", ""),
             "psu": (kv.get("psu") or "").lower(),
@@ -253,7 +257,6 @@ def merged():
             "failed": int(failed) if failed is not None else 0,
             "disk": kv.get("disk", ""),
             "disk_life": kv.get("disk_life", ""),
-            "boots": kv.get("boots", ""),
             "intrusion": (kv.get("intrusion") or "").lower(),
         })
 
