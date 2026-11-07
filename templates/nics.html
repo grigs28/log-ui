@@ -97,7 +97,12 @@
       <span class="srvstat">{{ h.count }} 块网卡{% if h.bad %} · <b style="color:var(--led-warn)">{{ h.bad }} 处问题</b>{% endif %}</span>
     </div>
     <div class="srvrow2">
-      <span class="srvstat">{{ h.ip or '无 IP' }}</span>
+      <span class="srvstat" title="192 段 / 10 段 / BMC">
+        {%- if h.ip0 %}{{ h.ip0 }}{% endif -%}
+        {%- if h.ip10 %} · {{ h.ip10 }}{% endif -%}
+        {%- if not h.ip0 and not h.ip10 %} {{ h.ip or '无 IP' }}{% endif -%}
+        {%- if h.bmc_ip %} · BMC {{ h.bmc_ip }}{% endif -%}
+      </span>
       {% if h.updated %}
       <span class="srvstat{% if h.stale %} stale{% endif %}"
             title="这台机器最近一次巡检上报的时间">更新 {{ h.updated }}{% if h.stale %}（本轮未上报）{% endif %}</span>

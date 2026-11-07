@@ -584,9 +584,18 @@ def merged(show_vm: bool = False):
     # 主机 IP：扩展区里给了 ip= 就用它；否则用 NAS 的 hosts 文件反查。
     # （2026-11-06 实施侧去掉了行尾 [来源 host(ip)]，页面不能再从行里拿 IP）
     ipmap = _host_ip_map()
+    try:
+        from .netinfo import map_by_host
+        addrs = map_by_host()
+    except Exception:
+        addrs = {}
     for h in out:
+        a = addrs.get(h["name"]) or {}
+        h["ip0"] = a.get("ip0") or ""
+        h["ip10"] = a.get("ip10") or ""
+        h["bmc_ip"] = a.get("bmc_ip") or ""
         if not h["ip"]:
-            h["ip"] = ipmap.get(h["name"], "")
+            h["ip"] = h["ip0"] or ipmap.get(h["name"], "")
 
     # ---- 虚拟机过滤：全是虚拟网卡驱动的当 VM，默认隐藏（可 ?vm=1 显示）----
     cfg = _load_cfg()

@@ -222,7 +222,11 @@ def merged():
         kv = h["kv"]
         issues = h["issues"]
         # 虚拟机/无 IPMI：ipmi=none 且没有任何传感器数据 → 「不适用」，不当异常
-        na = (kv.get("ipmi", "").lower() == "none") and not kv.get("inlet") and not kv.get("cpu")
+        # 虚拟机判定：脚本给了 virt=kvm/vmware 就直接判「不适用」；
+        # 没给 virt 时退回「无 IPMI 且无任何传感器读数」
+        virt = (kv.get("virt") or "").lower()
+        na = (virt not in ("", "none", "physical")) or (
+            kv.get("ipmi", "").lower() == "none" and not kv.get("inlet") and not kv.get("cpu"))
         level = "err" if any(i["level"] == "err" for i in issues) else (
             "warn" if issues else ("na" if na else ("ok" if kv else "none")))
 
@@ -263,6 +267,21 @@ def merged():
             "disk_life": kv.get("disk_life", ""),
             "intrusion": (kv.get("intrusion") or "").lower(),
         })
+
+    # 地址（192.168.0.x / 10.10.10.x / BMC）：来自 hw.bmc.map.sh，和整机巡检是两条上报线
+    try:
+        from .netinfo import map_by_host
+        addrs = map_by_host()
+    except Exception:
+        addrs = {}
+    for h in out:
+        a = addrs.get(h["name"]) or {}
+        h["ip0"] = a.get("ip0") or ""
+        h["ip10"] = a.get("ip10") or ""
+        h["bmc_ip"] = a.get("bmc_ip") or ""
+        h["bmc_check"] = a.get("bmc_check") or ""
+        if not h["ip"]:
+            h["ip"] = h["ip0"]
 
     out.sort(key=lambda x: (0 if x["issues"] else 1, 0 if x["state"] == "na" else 1, x["name"]))
 
