@@ -462,6 +462,18 @@ def disks_page(request: Request, view: str = "", vm: int = 0):
              "hb": hb, **nics.merged(show_vm=bool(vm))},
         )
     data = disks.merged()
+    # 每台机器补三个地址（192 段 / 10 段 / BMC），来源 hw.bmc.map.sh
+    try:
+        from .netinfo import map_by_host
+        _addrs = map_by_host()
+    except Exception:
+        _addrs = {}
+    for _s in data.get("servers") or []:
+        _a = _addrs.get(_s.get("name")) or {}
+        _s["ip0"] = _a.get("ip0") or ""
+        _s["ip10"] = _a.get("ip10") or ""
+        _s["bmc_ip"] = _a.get("bmc_ip") or ""
+        _s["bmc_check"] = _a.get("bmc_check") or ""
     return templates.TemplateResponse(
         request, "disks.html",
         {"user": user, "theme": _theme(user), "is_admin": bool(user.get("is_admin")),
