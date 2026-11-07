@@ -92,7 +92,7 @@
     {% for h in hosts %}
     <tr>
       <td class="mono"><b>{{ h.name }}</b>
-        {% if h.ip0 %}<div class="meta" style="font-size:11px">{{ h.ip0 }}</div>{% endif %}
+        {% if h.ip0 %}<div class="meta" style="font-size:11px"{% if h.others %} title="其他网段：{{ h.others|join(' · ') }}"{% endif %}>{{ h.ip0 }}</div>{% endif %}
         {% if h.ip10 %}<div class="meta" style="font-size:11px">{{ h.ip10 }}</div>{% endif %}
         {% if not h.ip0 and not h.ip10 and h.ip %}<div class="meta" style="font-size:11px">{{ h.ip }}</div>{% endif %}
       </td>

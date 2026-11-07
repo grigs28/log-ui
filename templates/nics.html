@@ -97,7 +97,7 @@
       <span class="srvstat">{{ h.count }} 块网卡{% if h.bad %} · <b style="color:var(--led-warn)">{{ h.bad }} 处问题</b>{% endif %}</span>
     </div>
     <div class="srvrow2">
-      <span class="srvstat" title="192 段 / 10 段 / BMC">
+      <span class="srvstat" title="192 段 / 10 段 / BMC{% if h.others %}&#10;其他网段：{{ h.others|join(' · ') }}{% endif %}">
         {%- if h.ip0 %}{{ h.ip0 }}{% endif -%}
         {%- if h.ip10 %} · {{ h.ip10 }}{% endif -%}
         {%- if not h.ip0 and not h.ip10 %} {{ h.ip or '无 IP' }}{% endif -%}

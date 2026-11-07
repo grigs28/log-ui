@@ -65,7 +65,7 @@
 
     </div>
     <div class="srvrow2">
-    <span class="srvstat" title="192 段 / 10 段 / BMC 带外">
+    <span class="srvstat" title="192 段 / 10 段 / BMC 带外{% if s.others %}&#10;其他网段：{{ s.others|join(' · ') }}{% endif %}">
       {%- if s.ip0 %}{{ s.ip0 }}{% endif -%}
       {%- if s.ip10 %} · {{ s.ip10 }}{% endif -%}
       {%- if not s.ip0 and not s.ip10 %} {{ s.ip or s.addr_note or '无 IP' }}{% endif -%}

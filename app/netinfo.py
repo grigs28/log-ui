@@ -61,11 +61,21 @@ def map_by_host():
             continue
         # 查询默认倒序，第一次见到的就是最新的
         if host not in out:
+            # v0.0.5 那一批（2026-11-07 11:49）用的是 ip91/ip92/ip93（192.168.9x.x），
+            # 前后的批次是 ip10/ip0。为了那一批也不显示成空，这里做兜底：
+            #   192 段：ip0 → ip93（集群段）→ ip91 → ip92
+            #   10 段：只有 ip10
+            extra = {k: v for k, v in kv.items() if re.fullmatch(r'ip\d+', k)}
+            ip192 = (kv.get("ip0") or extra.get("ip93") or extra.get("ip91")
+                     or extra.get("ip92") or "")
             out[host] = {
                 "bmc_ip": (kv.get("bmc_ip") or "").replace("none", "") or "",
                 "bmc_check": (kv.get("bmc_check") or "").lower(),
                 "ip10": kv.get("ip10") or "",
-                "ip0": kv.get("ip0") or "",
+                "ip0": ip192,
+                # 其余网段的地址，留给悬停提示（91/92/93 那批能看见全）
+                "others": [v for k, v in sorted(extra.items())
+                           if v and v != ip192 and k != "ip10"],
             }
     if out:
         _CACHE["data"], _CACHE["ts"] = out, now
